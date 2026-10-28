@@ -21,7 +21,7 @@ int main() {
         return 1;
     }
 
-    const originalengine::SceneObject* player = scene.findObject("Player");
+    originalengine::SceneObject* player = scene.findObject("Player");
     if (player == nullptr || player->transform.position.x != 1.0F ||
         player->transform.position.y != 2.0F ||
         player->transform.position.z != 3.0F ||
