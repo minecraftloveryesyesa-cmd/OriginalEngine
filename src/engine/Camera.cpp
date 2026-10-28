@@ -1,4 +1,4 @@
-#include "engine/Camera.hpp"
+#include "engine/Camera.hpp"\n#include "engine/CollisionWorld.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -18,7 +18,7 @@ void Camera::rotate(float mouseDeltaX, float mouseDeltaY) {
 }
 
 void Camera::move(float forwardAxis, float rightAxis, float verticalAxis,
-                  float deltaSeconds, bool fast) {
+                  float deltaSeconds, bool fast,\n                  const CollisionWorld* collisionWorld, float collisionRadius) {
     if (deltaSeconds <= 0.0F) {
         return;
     }
@@ -41,9 +41,21 @@ void Camera::move(float forwardAxis, float rightAxis, float verticalAxis,
     const float cosYaw = std::cos(yaw_);
 
     // Movement stays level with the ground; looking up does not make WASD fly.
-    x_ += (sinYaw * forwardAxis + cosYaw * rightAxis) * speed * deltaSeconds;
-    z_ += (cosYaw * forwardAxis - sinYaw * rightAxis) * speed * deltaSeconds;
-    y_ += verticalAxis * speed * deltaSeconds;
+    const float dx = (sinYaw * forwardAxis + cosYaw * rightAxis) * speed * deltaSeconds;
+    const float dz = (cosYaw * forwardAxis - sinYaw * rightAxis) * speed * deltaSeconds;
+    const float dy = verticalAxis * speed * deltaSeconds;
+
+    if (collisionWorld == nullptr) {
+        x_ += dx;
+        y_ += dy;
+        z_ += dz;
+        return;
+    }
+
+    // Resolve each axis separately to prevent wall penetration while allowing sliding.
+    x_ += collisionWorld->resolveAxis(x_, y_, z_, dx, collisionRadius, 0);
+    y_ += collisionWorld->resolveAxis(x_, y_, z_, dy, collisionRadius, 1);
+    z_ += collisionWorld->resolveAxis(x_, y_, z_, dz, collisionRadius, 2);
 }
 
 } // namespace originalengine
