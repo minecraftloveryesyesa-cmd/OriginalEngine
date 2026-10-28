@@ -6,12 +6,12 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 
 - CMake-based C++20 project
 - SDL3 window and event loop
-- First-person camera with WASD movement and mouse-look
+- First-person camera with WASD movement and mouse-look\n- Axis-aligned collision world; camera movement is blocked by obstacles and slides along walls
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
 - Animated perspective-projected 3D cube with six face colors
 - World-space perspective floor grid that responds to camera movement
-- GitHub Actions builds the Windows executable, runs camera unit tests and a rendering smoke test, and uploads the executable as an artifact
+- GitHub Actions builds the Windows executable, runs camera and collision unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
 > The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting uses a painter's algorithm; intersecting geometry and complex scenes will need a depth-buffer renderer later.
 
@@ -25,7 +25,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
 
-## Requirements
+## Collision prototype\n\nThe collision module supports static axis-aligned bounding boxes (AABBs). Camera movement resolves X, Y and Z separately to prevent entering a box and to allow sliding along its faces. This is a prototype; rotating meshes, slopes, stair stepping and a full capsule controller are not implemented yet.\n\n## Requirements
 
 - CMake 3.24+
 - A C++20 compiler
@@ -57,7 +57,7 @@ GitHub Actions can compile the Windows app and run automated tests, but it canno
 include/engine/       Public engine headers
 src/engine/           Engine implementations
 src/main.cpp          Sample application entry point
-tests/                Automated camera tests
+tests/                Automated camera and collision tests
 .github/workflows/    GitHub Actions workflow
 ```
 
