@@ -1,6 +1,6 @@
 #pragma once
 
-namespace originalengine {
+namespace originalengine {\n\nclass CollisionWorld;
 
 // First-person camera using +Z as the initial forward direction.
 class Camera {
@@ -9,7 +9,7 @@ public:
 
     void rotate(float mouseDeltaX, float mouseDeltaY);
     void move(float forwardAxis, float rightAxis, float verticalAxis,
-              float deltaSeconds, bool fast = false);
+              float deltaSeconds, bool fast = false,\n              const CollisionWorld* collisionWorld = nullptr,\n              float collisionRadius = 0.25F);
 
     [[nodiscard]] float x() const noexcept { return x_; }
     [[nodiscard]] float y() const noexcept { return y_; }
