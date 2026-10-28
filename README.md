@@ -12,6 +12,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Wavefront OBJ geometry loader for vertices and faces, including polygon triangulation and negative indices
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
+- On-screen debug overlay showing smoothed FPS, camera coordinates, and control hints
 - Animated perspective-projected 3D cube with six face colors and all three rotation axes
 - Renders multiple visible scene objects from shared OBJ mesh data, applying each object's position, rotation, scale, and visibility flag
 - Press 1 or 2 to toggle the visibility of each demo pyramid at runtime
@@ -30,6 +31,8 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
+
+The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), and a reminder of the main controls. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
 
 ## OBJ mesh loader prototype
 
