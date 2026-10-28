@@ -14,12 +14,6 @@
 namespace originalengine {
 namespace {
 
-struct Vec3 {
-    float x;
-    float y;
-    float z;
-};
-
 struct Face {
     std::array<int, 4> indices;
     SDL_Color color;
