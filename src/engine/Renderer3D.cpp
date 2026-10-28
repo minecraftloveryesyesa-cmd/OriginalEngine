@@ -46,6 +46,50 @@ Vec3 toCameraSpace(Vec3 world, const Camera& camera) {
     return p;
 }
 
+std::vector<Vec3> clipAgainstNearPlane(const std::vector<Vec3>& polygon, float nearPlane) {
+    std::vector<Vec3> clipped;
+    if (polygon.empty()) {
+        return clipped;
+    }
+
+    Vec3 previous = polygon.back();
+    bool previousInside = previous.z > nearPlane;
+    for (const Vec3 current : polygon) {
+        const bool currentInside = current.z > nearPlane;
+        if (currentInside != previousInside) {
+            const float denominator = current.z - previous.z;
+            if (std::abs(denominator) > 1.0e-7F) {
+                const float t = (nearPlane - previous.z) / denominator;
+                clipped.push_back({
+                    previous.x + (current.x - previous.x) * t,
+                    previous.y + (current.y - previous.y) * t,
+                    nearPlane
+                });
+            }
+        }
+        if (currentInside) {
+            clipped.push_back(current);
+        }
+        previous = current;
+        previousInside = currentInside;
+    }
+    return clipped;
+}
+
+SDL_Vertex makeVertex(Vec3 point, SDL_Color color,
+                      const auto& project) {
+    SDL_Vertex vertex{};
+    vertex.position = project(point);
+    vertex.color = {
+        static_cast<float>(color.r) / 255.0F,
+        static_cast<float>(color.g) / 255.0F,
+        static_cast<float>(color.b) / 255.0F,
+        static_cast<float>(color.a) / 255.0F
+    };
+    vertex.tex_coord = {0.0F, 0.0F};
+    return vertex;
+}
+
 } // namespace
 
 Renderer3D::Renderer3D(SDL_Renderer* renderer)
@@ -155,35 +199,24 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
               [](const Face& a, const Face& b) { return a.depth > b.depth; });
 
     for (const Face& face : faces) {
-        bool fullyInFront = true;
+        std::vector<Vec3> polygon;
+        polygon.reserve(face.indices.size());
         for (const int index : face.indices) {
-            if (transformed[static_cast<std::size_t>(index)].z <= nearPlane) {
-                fullyInFront = false;
-                break;
-            }
+            polygon.push_back(transformed[static_cast<std::size_t>(index)]);
         }
-        if (!fullyInFront) {
+        polygon = clipAgainstNearPlane(polygon, nearPlane);
+        if (polygon.size() < 3) {
             continue;
         }
 
-        std::array<SDL_Vertex, 6> vertices{};
-        const std::array<int, 6> triangleIndices{{
-            face.indices[0], face.indices[1], face.indices[2],
-            face.indices[0], face.indices[2], face.indices[3]
-        }};
-
-        for (std::size_t i = 0; i < triangleIndices.size(); ++i) {
-            const Vec3 point = transformed[static_cast<std::size_t>(triangleIndices[i])];
-            vertices[i].position = project(point);
-            vertices[i].color = {
-                static_cast<float>(face.color.r) / 255.0F,
-                static_cast<float>(face.color.g) / 255.0F,
-                static_cast<float>(face.color.b) / 255.0F,
-                static_cast<float>(face.color.a) / 255.0F
-            };
-            vertices[i].tex_coord = {0.0F, 0.0F};
+        // Clipping can turn a quad into a larger polygon; triangulate it as a fan.
+        std::vector<SDL_Vertex> vertices;
+        vertices.reserve((polygon.size() - 2) * 3);
+        for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
+            vertices.push_back(makeVertex(polygon[0], face.color, project));
+            vertices.push_back(makeVertex(polygon[i], face.color, project));
+            vertices.push_back(makeVertex(polygon[i + 1], face.color, project));
         }
-
         if (!SDL_RenderGeometry(renderer_, nullptr, vertices.data(),
                                 static_cast<int>(vertices.size()), nullptr, 0)) {
             SDL_Log("SDL_RenderGeometry failed: %s", SDL_GetError());
@@ -207,11 +240,11 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         triangles.reserve(mesh.triangles.size());
 
         for (const MeshTriangle& triangle : mesh.triangles) {
-            TriangleToDraw item{};
+            std::vector<Vec3> polygon;
+            polygon.reserve(3);
             bool valid = true;
             float depth = 0.0F;
-            for (std::size_t corner = 0; corner < 3; ++corner) {
-                const std::size_t index = triangle.indices[corner];
+            for (const std::size_t index : triangle.indices) {
                 if (index >= mesh.vertices.size()) {
                     valid = false;
                     break;
@@ -229,24 +262,27 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 point.y += meshTransform.position.y;
                 point.z += meshTransform.position.z;
                 point = toCameraSpace(point, camera);
-                if (point.z <= nearPlane) {
-                    valid = false;
-                    break;
-                }
-
-                const SDL_FPoint screen = project(point);
-                item.vertices[corner].position = screen;
-                item.vertices[corner].color = {
-                    0.25F + 0.12F * static_cast<float>(corner),
-                    0.72F,
-                    0.94F - 0.12F * static_cast<float>(corner),
-                    1.0F
-                };
-                item.vertices[corner].tex_coord = {0.0F, 0.0F};
+                polygon.push_back(point);
                 depth += point.z / 3.0F;
             }
-            if (valid) {
-                item.depth = depth;
+            if (!valid) {
+                continue;
+            }
+            polygon = clipAgainstNearPlane(polygon, nearPlane);
+            if (polygon.size() < 3) {
+                continue;
+            }
+
+            TriangleToDraw item{};
+            item.depth = depth;
+            const SDL_Color colors[3] = {
+                {64, 184, 240, 255}, {82, 184, 240, 255}, {64, 184, 220, 255}
+            };
+            for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
+                const Vec3 points[3] = {polygon[0], polygon[i], polygon[i + 1]};
+                for (std::size_t corner = 0; corner < 3; ++corner) {
+                    item.vertices[corner] = makeVertex(points[corner], colors[corner], project);
+                }
                 triangles.push_back(item);
             }
         }
