@@ -4,6 +4,7 @@
 
 #include <exception>
 #include <iostream>
+#include <string_view>
 
 namespace {
 
@@ -14,7 +15,8 @@ void logSdlError(const char* operation) {
 
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+    const bool smokeTest = argc > 1 && std::string_view(argv[1]) == "--smoke-test";
     constexpr int windowWidth = 1280;
     constexpr int windowHeight = 720;
 
@@ -24,7 +26,7 @@ int main() {
     }
 
     SDL_Window* window = SDL_CreateWindow(
-        "OriginalEngine - 3D Renderer",
+        smokeTest ? "OriginalEngine - CI Smoke Test" : "OriginalEngine - 3D Renderer",
         windowWidth,
         windowHeight,
         SDL_WINDOW_RESIZABLE
@@ -44,7 +46,9 @@ int main() {
         return 1;
     }
 
-    SDL_SetRenderVSync(renderer, 1);
+    if (!smokeTest) {
+        SDL_SetRenderVSync(renderer, 1);
+    }
 
     int exitCode = 0;
     try {
@@ -64,13 +68,27 @@ int main() {
                 }
             }
 
+            if (!running) {
+                break;
+            }
+
             int width = 0;
             int height = 0;
             SDL_GetWindowSize(window, &width, &height);
 
             const double elapsedSeconds =
                 static_cast<double>(SDL_GetTicks() - startTicks) / 1000.0;
-            renderer3D.render(width, height, elapsedSeconds);
+            if (!renderer3D.render(width, height, elapsedSeconds)) {
+                std::cerr << "[OriginalEngine] Rendering a frame failed.\n";
+                exitCode = 1;
+                break;
+            }
+
+            if (smokeTest) {
+                std::cout << "[OriginalEngine] Smoke test passed: SDL initialized, "
+                             "window and renderer created, and one frame rendered.\n";
+                running = false;
+            }
         }
     } catch (const std::exception& error) {
         std::cerr << "[OriginalEngine] " << error.what() << '\n';
