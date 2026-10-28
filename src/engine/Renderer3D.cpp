@@ -187,7 +187,6 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
 
     // Draw an optional loaded mesh using the supplied scene transform.
     if (mesh != nullptr && meshTransform != nullptr && !mesh->empty()) {
-        std::vector<std::pair<float, SDL_Vertex>> unused;
         struct TriangleToDraw {
             std::array<SDL_Vertex, 3> vertices;
             float depth;
