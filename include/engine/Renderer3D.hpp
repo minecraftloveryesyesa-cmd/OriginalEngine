@@ -23,7 +23,8 @@ public:
 
     [[nodiscard]] bool render(int width, int height, double elapsedSeconds,
                               const Camera& camera,
-                              const std::vector<MeshInstance>& meshInstances = {});
+                              const std::vector<MeshInstance>& meshInstances = {},
+                              bool wireframe = false);
 
 private:
     SDL_Renderer* renderer_;
