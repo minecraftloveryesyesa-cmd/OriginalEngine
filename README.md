@@ -26,7 +26,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **A / D:** strafe left / right
 - **Q / E:** move down / up
 - **Left or right Shift:** move faster
-- **1 / 2:** show or hide the left/right demo pyramid
+- **1:** show or hide the right demo pyramid; **2:** show or hide the left demo pyramid
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
