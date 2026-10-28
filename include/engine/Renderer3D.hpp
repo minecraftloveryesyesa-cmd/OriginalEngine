@@ -10,7 +10,7 @@ class Renderer3D {
 public:
     explicit Renderer3D(SDL_Renderer* renderer);
 
-    void render(int width, int height, double elapsedSeconds);
+    [[nodiscard]] bool render(int width, int height, double elapsedSeconds);
 
 private:
     SDL_Renderer* renderer_;
