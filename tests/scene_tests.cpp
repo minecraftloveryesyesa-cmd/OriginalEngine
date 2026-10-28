@@ -31,12 +31,12 @@ int main() {
     }
 
     if (!player->visible) {
-        std::cerr << "Scene objects should be visible by default.\\n";
+        std::cerr << "Scene objects should be visible by default.\n";
         return 1;
     }
     player->visible = false;
     if (player->visible) {
-        std::cerr << "Scene visibility flag did not retain its value.\\n";
+        std::cerr << "Scene visibility flag did not retain its value.\n";
         return 1;
     }
 
