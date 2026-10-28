@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     if (!smokeTest) {
         SDL_SetRenderVSync(renderer, 1);
         SDL_SetWindowTitle(window,
-            "OriginalEngine | WASD move, Q/E up/down, Shift fast | Right-click: mouse look | Esc: exit");
+            "OriginalEngine | WASD move, Q/E up/down, Shift fast | 1/2: toggle pyramids | Right-click: mouse look | Esc: exit");
     }
 
     int exitCode = 0;
@@ -88,8 +88,8 @@ int main(int argc, char* argv[]) {
         }
 
         // Resolve object pointers after all additions so vector reallocation cannot invalidate them.
-        const originalengine::SceneObject* demoObject = scene.findObject("DemoPyramid");
-        const originalengine::SceneObject* leftObject = scene.findObject("DemoPyramidLeft");
+        originalengine::SceneObject* demoObject = scene.findObject("DemoPyramid");
+        originalengine::SceneObject* leftObject = scene.findObject("DemoPyramidLeft");
         if (demoObject == nullptr || leftObject == nullptr) {
             std::cerr << "[OriginalEngine] A demo scene object was not found.\n";
             exitCode = 1;
@@ -110,6 +110,14 @@ int main(int argc, char* argv[]) {
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_EVENT_QUIT) {
                     running = false;
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_1 &&
+                           demoObject != nullptr) {
+                    demoObject->visible = !demoObject->visible;
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_2 &&
+                           leftObject != nullptr) {
+                    leftObject->visible = !leftObject->visible;
                 } else if (event.type == SDL_EVENT_KEY_DOWN &&
                            event.key.key == SDLK_ESCAPE && !event.key.repeat) {
                     if (mouseCaptured) {
