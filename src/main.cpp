@@ -1,4 +1,4 @@
-#include "engine/Camera.hpp"
+#include "engine/Camera.hpp"\n#include "engine/CollisionWorld.hpp"
 #include "engine/Renderer3D.hpp"
 
 #include <SDL3/SDL.h>
@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     int exitCode = 0;
     try {
         originalengine::Renderer3D renderer3D(renderer);
-        originalengine::Camera camera;
+        originalengine::Camera camera;\n        originalengine::CollisionWorld collisionWorld;\n        // Conservative static bounds around the demo cube.\n        collisionWorld.addObstacle({-1.4F, -1.4F, 2.8F, 1.4F, 1.4F, 5.6F});
         bool running = true;
         bool mouseCaptured = false;
         Uint64 previousTicks = SDL_GetTicks();
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
                                        static_cast<float>(keys[SDL_SCANCODE_Q]);
                 const bool fast = keys[SDL_SCANCODE_LSHIFT] ||
                                   keys[SDL_SCANCODE_RSHIFT];
-                camera.move(forward, right, vertical, deltaSeconds, fast);
+                camera.move(forward, right, vertical, deltaSeconds, fast, &collisionWorld);
             }
 
             int width = 0;
