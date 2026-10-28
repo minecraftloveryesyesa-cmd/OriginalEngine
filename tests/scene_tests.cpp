@@ -30,6 +30,16 @@ int main() {
         return 1;
     }
 
+    if (!player->visible) {
+        std::cerr << "Scene objects should be visible by default.\\n";
+        return 1;
+    }
+    player->visible = false;
+    if (player->visible) {
+        std::cerr << "Scene visibility flag did not retain its value.\\n";
+        return 1;
+    }
+
     if (scene.objectCount() != 1 || !scene.removeObject("Player") ||
         scene.removeObject("Player") || scene.findObject("Player") != nullptr ||
         scene.objectCount() != 0) {
