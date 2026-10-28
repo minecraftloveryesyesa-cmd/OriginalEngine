@@ -1,4 +1,5 @@
-#include "engine/Camera.hpp"\n#include "engine/CollisionWorld.hpp"
+#include "engine/Camera.hpp"
+#include "engine/CollisionWorld.hpp"
 
 #include <cmath>
 #include <iostream>
