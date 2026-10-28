@@ -6,12 +6,24 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 
 - CMake-based C++20 project
 - SDL3 window and event loop
+- First-person camera with WASD movement and mouse-look
+- Q/E vertical movement; Shift for faster movement
+- Right-click toggles mouse capture; Esc releases the mouse or exits
 - Animated perspective-projected 3D cube with six face colors
-- Perspective grid to communicate depth
-- Esc or window close exits the application
-- GitHub Actions builds the Windows executable and uploads it as an artifact
+- World-space perspective floor grid that responds to camera movement
+- GitHub Actions builds the Windows executable, runs camera unit tests and a rendering smoke test, and uploads the executable as an artifact
 
-> The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting uses a painter's algorithm, so intersecting geometry and complex scenes will need a depth-buffer renderer later.
+> The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting uses a painter's algorithm; intersecting geometry and complex scenes will need a depth-buffer renderer later.
+
+## Camera controls
+
+- **W / S:** move forward / backward
+- **A / D:** strafe left / right
+- **Q / E:** move down / up
+- **Left or right Shift:** move faster
+- **Right mouse button:** capture/release the mouse for looking around
+- **Mouse movement:** look around while captured
+- **Esc:** release the mouse; press again to exit
 
 ## Requirements
 
@@ -26,6 +38,7 @@ Run in a terminal with CMake and MSVC available:
 ```powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 .\build\Release\originalengine_app.exe
 ```
 
@@ -36,7 +49,7 @@ cmake --build build --config Release
 3. Open the completed run and download the OriginalEngine-Windows-x64 artifact.
 4. Extract the ZIP and run originalengine_app.exe on a compatible Windows PC.
 
-GitHub Actions can compile the Windows app, but it cannot show you the interactive window inside the build log. You need a Windows device to run and visually inspect the executable.
+GitHub Actions can compile the Windows app and run automated tests, but it cannot show the interactive window inside the build log. You need a Windows device to run and visually inspect the executable.
 
 ## Project layout
 
@@ -44,6 +57,7 @@ GitHub Actions can compile the Windows app, but it cannot show you the interacti
 include/engine/       Public engine headers
 src/engine/           Engine implementations
 src/main.cpp          Sample application entry point
+tests/                Automated camera tests
 .github/workflows/    GitHub Actions workflow
 ```
 
@@ -51,7 +65,7 @@ src/main.cpp          Sample application entry point
 
 1. Initial application and build foundation
 2. First 3D projection and colored cube
-3. Camera controls and mesh abstraction
+3. First-person camera and movement
 4. GPU-backed rendering and depth testing
 5. Texture and model loading
 6. Scene management, audio, and physics
