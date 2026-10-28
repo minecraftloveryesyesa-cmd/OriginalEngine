@@ -43,9 +43,10 @@ if(ORIGINALENGINE_BUILD_APP)
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(SDL3)
+        target_link_libraries(originalengine PUBLIC SDL3::SDL3)
 
         add_executable(originalengine_app src/main.cpp)
-        target_link_libraries(originalengine_app PRIVATE originalengine SDL3::SDL3)
+        target_link_libraries(originalengine_app PRIVATE originalengine)
         target_compile_definitions(originalengine_app PRIVATE ORIGINALENGINE_USE_SDL3=1)
 
         if(WIN32)
