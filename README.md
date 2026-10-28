@@ -9,11 +9,12 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - First-person camera with WASD movement and mouse-look
 - Axis-aligned collision world; camera movement is blocked by obstacles and slides along walls
 - Basic scene registry with unique object names, transform data, visibility flags, lookup, and removal
+- Wavefront OBJ geometry loader for vertices and faces, including polygon triangulation and negative indices
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
 - Animated perspective-projected 3D cube with six face colors
 - World-space perspective floor grid that responds to camera movement
-- GitHub Actions builds the Windows executable, runs camera, collision, and scene-management unit tests plus a rendering smoke test, and uploads the executable as an artifact
+- GitHub Actions builds the Windows executable, runs camera, collision, scene-management, and OBJ-loader unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
 > The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting uses a painter's algorithm; intersecting geometry and complex scenes will need a depth-buffer renderer later.
 
@@ -26,6 +27,10 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
+
+## OBJ mesh loader prototype
+
+`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. Rendering loaded meshes and loading materials/textures are not implemented yet.
 
 ## Collision prototype
 
@@ -73,6 +78,6 @@ tests/                Automated camera, collision, and scene tests
 2. First 3D projection and colored cube
 3. First-person camera and movement
 4. GPU-backed rendering and depth testing
-5. Texture and model loading
-6. Scene management, audio, and physics
+5. Render scene objects and loaded meshes
+6. Texture/material loading, audio, and physics
 7. Platform support expansion
