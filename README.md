@@ -6,7 +6,8 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 
 - CMake-based C++20 project
 - SDL3 window and event loop
-- First-person camera with WASD movement and mouse-look\n- Axis-aligned collision world; camera movement is blocked by obstacles and slides along walls
+- First-person camera with WASD movement and mouse-look
+- Axis-aligned collision world; camera movement is blocked by obstacles and slides along walls
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
 - Animated perspective-projected 3D cube with six face colors
@@ -25,7 +26,11 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
 
-## Collision prototype\n\nThe collision module supports static axis-aligned bounding boxes (AABBs). Camera movement resolves X, Y and Z separately to prevent entering a box and to allow sliding along its faces. This is a prototype; rotating meshes, slopes, stair stepping and a full capsule controller are not implemented yet.\n\n## Requirements
+## Collision prototype
+
+The collision module supports static axis-aligned bounding boxes (AABBs). Camera movement resolves X, Y and Z separately to prevent entering a box and to allow sliding along its faces. This is a prototype; rotating meshes, slopes, stair stepping and a full capsule controller are not implemented yet.
+
+## Requirements
 
 - CMake 3.24+
 - A C++20 compiler
