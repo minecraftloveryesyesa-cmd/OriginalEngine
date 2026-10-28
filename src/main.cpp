@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
         std::string meshError;
         if (!originalengine::ObjMeshLoader::loadFromFile("assets/demo.obj", demoMesh, &meshError)) {
             std::cerr << "[OriginalEngine] Could not load assets/demo.obj: "
-                      << meshError << '\\n';
+                      << meshError << '\n';
             exitCode = 1;
         }
         originalengine::Scene scene;
@@ -75,12 +75,12 @@ int main(int argc, char* argv[]) {
         demoTransform.rotation = {0.0F, 0.25F, 0.0F};
         demoTransform.scale = {0.9F, 0.9F, 0.9F};
         if (!scene.addObject("DemoPyramid", demoTransform)) {
-            std::cerr << "[OriginalEngine] Could not create demo scene object.\\n";
+            std::cerr << "[OriginalEngine] Could not create demo scene object.\n";
             exitCode = 1;
         }
         const originalengine::SceneObject* demoObject = scene.findObject("DemoPyramid");
         if (demoObject == nullptr) {
-            std::cerr << "[OriginalEngine] Demo scene object was not found.\\n";
+            std::cerr << "[OriginalEngine] Demo scene object was not found.\n";
             exitCode = 1;
         }
         // Conservative static bounds around the demo cube.
