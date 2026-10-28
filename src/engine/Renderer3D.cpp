@@ -1,11 +1,15 @@
 #include "engine/Renderer3D.hpp"
 
 #include "engine/Camera.hpp"
+#include "engine/Mesh.hpp"
+#include "engine/Scene.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace originalengine {
 namespace {
@@ -34,6 +38,12 @@ Vec3 rotateY(Vec3 p, float angle) {
     return {p.x * c + p.z * s, p.y, -p.x * s + p.z * c};
 }
 
+Vec3 rotateZ(Vec3 p, float angle) {
+    const float c = std::cos(angle);
+    const float s = std::sin(angle);
+    return {p.x * c - p.y * s, p.x * s + p.y * c, p.z};
+}
+
 Vec3 toCameraSpace(Vec3 world, const Camera& camera) {
     Vec3 p{world.x - camera.x(), world.y - camera.y(), world.z - camera.z()};
     p = rotateY(p, -camera.yaw());
@@ -51,7 +61,8 @@ Renderer3D::Renderer3D(SDL_Renderer* renderer)
 }
 
 bool Renderer3D::render(int width, int height, double elapsedSeconds,
-                        const Camera& camera) {
+                        const Camera& camera, const Mesh* mesh,
+                        const Transform* meshTransform) {
     if (width <= 0 || height <= 0) {
         return false;
     }
@@ -111,6 +122,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     for (std::size_t i = 0; i < cube.size(); ++i) {
         Vec3 p = rotateX(cube[i], angleX);
         p = rotateY(p, angleY);
+        p = rotateZ(p, angleZ);
         p.z += 4.2F;
         transformed[i] = toCameraSpace(p, camera);
     }
@@ -170,6 +182,74 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                                 static_cast<int>(vertices.size()), nullptr, 0)) {
             SDL_Log("SDL_RenderGeometry failed: %s", SDL_GetError());
             return false;
+        }
+    }
+
+    // Draw an optional loaded mesh using the supplied scene transform.
+    if (mesh != nullptr && meshTransform != nullptr && !mesh->empty()) {
+        std::vector<std::pair<float, SDL_Vertex>> unused;
+        struct TriangleToDraw {
+            std::array<SDL_Vertex, 3> vertices;
+            float depth;
+        };
+        std::vector<TriangleToDraw> triangles;
+        triangles.reserve(mesh->triangles.size());
+
+        for (const MeshTriangle& triangle : mesh->triangles) {
+            TriangleToDraw item{};
+            bool valid = true;
+            float depth = 0.0F;
+            for (std::size_t corner = 0; corner < 3; ++corner) {
+                const std::size_t index = triangle.indices[corner];
+                if (index >= mesh->vertices.size()) {
+                    valid = false;
+                    break;
+                }
+                const MeshVertex& vertex = mesh->vertices[index];
+                Vec3 point{
+                    vertex.x * meshTransform->scale.x,
+                    vertex.y * meshTransform->scale.y,
+                    vertex.z * meshTransform->scale.z
+                };
+                point = rotateX(point, meshTransform->rotation.x);
+                point = rotateY(point, meshTransform->rotation.y);
+                point = rotateZ(point, meshTransform->rotation.z);
+                point.x += meshTransform->position.x;
+                point.y += meshTransform->position.y;
+                point.z += meshTransform->position.z;
+                point = toCameraSpace(point, camera);
+                if (point.z <= nearPlane) {
+                    valid = false;
+                    break;
+                }
+
+                const SDL_FPoint screen = project(point);
+                item.vertices[corner].position = screen;
+                item.vertices[corner].color = {
+                    0.25F + 0.12F * static_cast<float>(corner),
+                    0.72F,
+                    0.94F - 0.12F * static_cast<float>(corner),
+                    1.0F
+                };
+                item.vertices[corner].tex_coord = {0.0F, 0.0F};
+                depth += point.z / 3.0F;
+            }
+            if (valid) {
+                item.depth = depth;
+                triangles.push_back(item);
+            }
+        }
+
+        std::sort(triangles.begin(), triangles.end(),
+                  [](const TriangleToDraw& a, const TriangleToDraw& b) {
+                      return a.depth > b.depth;
+                  });
+        for (const TriangleToDraw& triangle : triangles) {
+            if (!SDL_RenderGeometry(renderer_, nullptr, triangle.vertices.data(), 3,
+                                    nullptr, 0)) {
+                SDL_Log("SDL_RenderGeometry for mesh failed: %s", SDL_GetError());
+                return false;
+            }
         }
     }
 
