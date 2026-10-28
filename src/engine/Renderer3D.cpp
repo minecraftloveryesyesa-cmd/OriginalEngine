@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -60,6 +61,17 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     if (width <= 0 || height <= 0) {
         return false;
     }
+
+    if (previousElapsedSeconds_ > 0.0) {
+        const double frameSeconds = elapsedSeconds - previousElapsedSeconds_;
+        if (frameSeconds > 0.0001) {
+            const float instantaneousFps = static_cast<float>(1.0 / frameSeconds);
+            smoothedFramesPerSecond_ = smoothedFramesPerSecond_ <= 0.0F
+                ? instantaneousFps
+                : smoothedFramesPerSecond_ * 0.9F + instantaneousFps * 0.1F;
+        }
+    }
+    previousElapsedSeconds_ = elapsedSeconds;
 
     SDL_SetRenderDrawColor(renderer_, 12, 18, 31, 255);
     SDL_RenderClear(renderer_);
@@ -251,6 +263,23 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             }
         }
     }
+
+    // SDL3's built-in debug font keeps the overlay dependency-free.
+    SDL_SetRenderDrawColor(renderer_, 232, 239, 250, 255);
+    char fpsText[64]{};
+    char positionText[96]{};
+    std::snprintf(fpsText, sizeof(fpsText), "FPS: %.1f", smoothedFramesPerSecond_);
+    std::snprintf(positionText, sizeof(positionText),
+                  "Camera: X %.2f  Y %.2f  Z %.2f",
+                  static_cast<double>(camera.x()),
+                  static_cast<double>(camera.y()),
+                  static_cast<double>(camera.z()));
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 12.0F, fpsText);
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 28.0F, positionText);
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 44.0F,
+                              "WASD Move | Q/E Up/Down | Shift Sprint");
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 60.0F,
+                              "1/2 Toggle Pyramids | Right-click Mouse Look | Esc Exit");
 
     SDL_RenderPresent(renderer_);
     return true;
