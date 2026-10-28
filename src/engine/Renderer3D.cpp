@@ -137,7 +137,12 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds) {
         for (std::size_t i = 0; i < triangleIndices.size(); ++i) {
             const Vec3 point = transformed[static_cast<std::size_t>(triangleIndices[i])];
             vertices[i].position = project(point);
-            vertices[i].color = face.color;
+            vertices[i].color = {
+                static_cast<float>(face.color.r) / 255.0F,
+                static_cast<float>(face.color.g) / 255.0F,
+                static_cast<float>(face.color.b) / 255.0F,
+                static_cast<float>(face.color.a) / 255.0F
+            };
             vertices[i].tex_coord = {0.0F, 0.0F};
         }
 
