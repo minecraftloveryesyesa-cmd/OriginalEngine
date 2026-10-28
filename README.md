@@ -8,11 +8,12 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - SDL3 window and event loop
 - First-person camera with WASD movement and mouse-look
 - Axis-aligned collision world; camera movement is blocked by obstacles and slides along walls
+- Basic scene registry with unique object names, transform data, visibility flags, lookup, and removal
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
 - Animated perspective-projected 3D cube with six face colors
 - World-space perspective floor grid that responds to camera movement
-- GitHub Actions builds the Windows executable, runs camera and collision unit tests plus a rendering smoke test, and uploads the executable as an artifact
+- GitHub Actions builds the Windows executable, runs camera, collision, and scene-management unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
 > The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting uses a painter's algorithm; intersecting geometry and complex scenes will need a depth-buffer renderer later.
 
@@ -62,7 +63,7 @@ GitHub Actions can compile the Windows app and run automated tests, but it canno
 include/engine/       Public engine headers
 src/engine/           Engine implementations
 src/main.cpp          Sample application entry point
-tests/                Automated camera and collision tests
+tests/                Automated camera, collision, and scene tests
 .github/workflows/    GitHub Actions workflow
 ```
 
