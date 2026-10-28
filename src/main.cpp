@@ -1,7 +1,9 @@
+#include "engine/Camera.hpp"
 #include "engine/Renderer3D.hpp"
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <exception>
 #include <iostream>
 #include <string_view>
@@ -26,7 +28,7 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_Window* window = SDL_CreateWindow(
-        smokeTest ? "OriginalEngine - CI Smoke Test" : "OriginalEngine - 3D Renderer",
+        smokeTest ? "OriginalEngine - CI Smoke Test" : "OriginalEngine - 3D Camera Demo",
         windowWidth,
         windowHeight,
         SDL_WINDOW_RESIZABLE
@@ -48,13 +50,18 @@ int main(int argc, char* argv[]) {
 
     if (!smokeTest) {
         SDL_SetRenderVSync(renderer, 1);
+        SDL_SetWindowTitle(window,
+            "OriginalEngine | WASD move, Q/E up/down, Shift fast | Right-click: mouse look | Esc: exit");
     }
 
     int exitCode = 0;
     try {
         originalengine::Renderer3D renderer3D(renderer);
+        originalengine::Camera camera;
         bool running = true;
-        const Uint64 startTicks = SDL_GetTicks();
+        bool mouseCaptured = false;
+        Uint64 previousTicks = SDL_GetTicks();
+        double elapsedSeconds = 0.0;
 
         while (running) {
             SDL_Event event{};
@@ -62,9 +69,25 @@ int main(int argc, char* argv[]) {
                 if (event.type == SDL_EVENT_QUIT) {
                     running = false;
                 } else if (event.type == SDL_EVENT_KEY_DOWN &&
-                           event.key.key == SDLK_ESCAPE &&
-                           !event.key.repeat) {
-                    running = false;
+                           event.key.key == SDLK_ESCAPE && !event.key.repeat) {
+                    if (mouseCaptured) {
+                        SDL_SetWindowRelativeMouseMode(window, false);
+                        mouseCaptured = false;
+                    } else {
+                        running = false;
+                    }
+                } else if (!smokeTest &&
+                           event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                           event.button.button == SDL_BUTTON_RIGHT) {
+                    mouseCaptured = !mouseCaptured;
+                    if (!SDL_SetWindowRelativeMouseMode(window, mouseCaptured)) {
+                        logSdlError("SDL_SetWindowRelativeMouseMode");
+                        mouseCaptured = false;
+                    }
+                } else if (!smokeTest && mouseCaptured &&
+                           event.type == SDL_EVENT_MOUSE_MOTION) {
+                    camera.rotate(static_cast<float>(event.motion.xrel),
+                                  static_cast<float>(event.motion.yrel));
                 }
             }
 
@@ -72,13 +95,30 @@ int main(int argc, char* argv[]) {
                 break;
             }
 
+            const Uint64 currentTicks = SDL_GetTicks();
+            const float deltaSeconds = std::min(
+                static_cast<float>(currentTicks - previousTicks) / 1000.0F, 0.1F);
+            previousTicks = currentTicks;
+            elapsedSeconds += static_cast<double>(deltaSeconds);
+
+            if (!smokeTest) {
+                const bool* keys = SDL_GetKeyboardState(nullptr);
+                const float forward = static_cast<float>(keys[SDL_SCANCODE_W]) -
+                                      static_cast<float>(keys[SDL_SCANCODE_S]);
+                const float right = static_cast<float>(keys[SDL_SCANCODE_D]) -
+                                    static_cast<float>(keys[SDL_SCANCODE_A]);
+                const float vertical = static_cast<float>(keys[SDL_SCANCODE_E]) -
+                                       static_cast<float>(keys[SDL_SCANCODE_Q]);
+                const bool fast = keys[SDL_SCANCODE_LSHIFT] ||
+                                  keys[SDL_SCANCODE_RSHIFT];
+                camera.move(forward, right, vertical, deltaSeconds, fast);
+            }
+
             int width = 0;
             int height = 0;
             SDL_GetWindowSize(window, &width, &height);
 
-            const double elapsedSeconds =
-                static_cast<double>(SDL_GetTicks() - startTicks) / 1000.0;
-            if (!renderer3D.render(width, height, elapsedSeconds)) {
+            if (!renderer3D.render(width, height, elapsedSeconds, camera)) {
                 std::cerr << "[OriginalEngine] Rendering a frame failed.\n";
                 exitCode = 1;
                 break;
