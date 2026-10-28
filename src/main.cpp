@@ -10,6 +10,7 @@
 #include <exception>
 #include <iostream>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -78,11 +79,25 @@ int main(int argc, char* argv[]) {
             std::cerr << "[OriginalEngine] Could not create demo scene object.\n";
             exitCode = 1;
         }
-        const originalengine::SceneObject* demoObject = scene.findObject("DemoPyramid");
-        if (demoObject == nullptr) {
-            std::cerr << "[OriginalEngine] Demo scene object was not found.\n";
+        originalengine::Transform secondTransform = demoTransform;
+        secondTransform.position.x = -2.6F;
+        secondTransform.rotation.y = -0.35F;
+        if (!scene.addObject("DemoPyramidLeft", secondTransform)) {
+            std::cerr << "[OriginalEngine] Could not create the second demo scene object.\n";
             exitCode = 1;
         }
+
+        // Resolve object pointers after all additions so vector reallocation cannot invalidate them.
+        const originalengine::SceneObject* demoObject = scene.findObject("DemoPyramid");
+        const originalengine::SceneObject* leftObject = scene.findObject("DemoPyramidLeft");
+        if (demoObject == nullptr || leftObject == nullptr) {
+            std::cerr << "[OriginalEngine] A demo scene object was not found.\n";
+            exitCode = 1;
+        }
+        const std::vector<originalengine::MeshInstance> meshInstances{
+            {&demoMesh, demoObject},
+            {&demoMesh, leftObject}
+        };
         // Conservative static bounds around the demo cube.
         collisionWorld.addObstacle({-1.4F, -1.4F, 2.8F, 1.4F, 1.4F, 5.6F});
         bool running = true;
@@ -146,8 +161,7 @@ int main(int argc, char* argv[]) {
             SDL_GetWindowSize(window, &width, &height);
 
             if (!renderer3D.render(width, height, elapsedSeconds, camera,
-                                  &demoMesh,
-                                  demoObject != nullptr ? &demoObject->transform : nullptr)) {
+                                  meshInstances)) {
                 std::cerr << "[OriginalEngine] Rendering a frame failed.\n";
                 exitCode = 1;
                 break;
