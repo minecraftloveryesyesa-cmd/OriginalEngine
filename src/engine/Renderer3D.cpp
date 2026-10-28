@@ -55,8 +55,8 @@ Renderer3D::Renderer3D(SDL_Renderer* renderer)
 }
 
 bool Renderer3D::render(int width, int height, double elapsedSeconds,
-                        const Camera& camera, const Mesh* mesh,
-                        const Transform* meshTransform) {
+                        const Camera& camera,
+                        const std::vector<MeshInstance>& meshInstances) {
     if (width <= 0 || height <= 0) {
         return false;
     }
@@ -179,37 +179,43 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         }
     }
 
-    // Draw an optional loaded mesh using the supplied scene transform.
-    if (mesh != nullptr && meshTransform != nullptr && !mesh->empty()) {
+    // Draw every visible scene object that has a valid mesh and transform.
+    for (const MeshInstance& instance : meshInstances) {
+        if (instance.mesh == nullptr || instance.object == nullptr ||
+            !instance.object->visible || instance.mesh->empty()) {
+            continue;
+        }
+        const Mesh& mesh = *instance.mesh;
+        const Transform& meshTransform = instance.object->transform;
         struct TriangleToDraw {
             std::array<SDL_Vertex, 3> vertices;
             float depth;
         };
         std::vector<TriangleToDraw> triangles;
-        triangles.reserve(mesh->triangles.size());
+        triangles.reserve(mesh.triangles.size());
 
-        for (const MeshTriangle& triangle : mesh->triangles) {
+        for (const MeshTriangle& triangle : mesh.triangles) {
             TriangleToDraw item{};
             bool valid = true;
             float depth = 0.0F;
             for (std::size_t corner = 0; corner < 3; ++corner) {
                 const std::size_t index = triangle.indices[corner];
-                if (index >= mesh->vertices.size()) {
+                if (index >= mesh.vertices.size()) {
                     valid = false;
                     break;
                 }
-                const MeshVertex& vertex = mesh->vertices[index];
+                const MeshVertex& vertex = mesh.vertices[index];
                 Vec3 point{
-                    vertex.x * meshTransform->scale.x,
-                    vertex.y * meshTransform->scale.y,
-                    vertex.z * meshTransform->scale.z
+                    vertex.x * meshTransform.scale.x,
+                    vertex.y * meshTransform.scale.y,
+                    vertex.z * meshTransform.scale.z
                 };
-                point = rotateX(point, meshTransform->rotation.x);
-                point = rotateY(point, meshTransform->rotation.y);
-                point = rotateZ(point, meshTransform->rotation.z);
-                point.x += meshTransform->position.x;
-                point.y += meshTransform->position.y;
-                point.z += meshTransform->position.z;
+                point = rotateX(point, meshTransform.rotation.x);
+                point = rotateY(point, meshTransform.rotation.y);
+                point = rotateZ(point, meshTransform.rotation.z);
+                point.x += meshTransform.position.x;
+                point.y += meshTransform.position.y;
+                point.z += meshTransform.position.z;
                 point = toCameraSpace(point, camera);
                 if (point.z <= nearPlane) {
                     valid = false;
@@ -243,7 +249,6 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 SDL_Log("SDL_RenderGeometry for mesh failed: %s", SDL_GetError());
                 return false;
             }
-        }
     }
 
     SDL_RenderPresent(renderer_);
