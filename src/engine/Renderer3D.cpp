@@ -101,7 +101,7 @@ Renderer3D::Renderer3D(SDL_Renderer* renderer)
 
 bool Renderer3D::render(int width, int height, double elapsedSeconds,
                         const Camera& camera,
-                        const std::vector<MeshInstance>& meshInstances) {
+                        const std::vector<MeshInstance>& meshInstances, bool wireframe) {
     if (width <= 0 || height <= 0) {
         return false;
     }
@@ -209,18 +209,30 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             continue;
         }
 
-        // Clipping can turn a quad into a larger polygon; triangulate it as a fan.
-        std::vector<SDL_Vertex> vertices;
-        vertices.reserve((polygon.size() - 2) * 3);
-        for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
-            vertices.push_back(makeVertex(polygon[0], face.color, project));
-            vertices.push_back(makeVertex(polygon[i], face.color, project));
-            vertices.push_back(makeVertex(polygon[i + 1], face.color, project));
-        }
-        if (!SDL_RenderGeometry(renderer_, nullptr, vertices.data(),
-                                static_cast<int>(vertices.size()), nullptr, 0)) {
-            SDL_Log("SDL_RenderGeometry failed: %s", SDL_GetError());
-            return false;
+        if (wireframe) {
+            SDL_SetRenderDrawColor(renderer_, 220, 232, 250, 255);
+            for (std::size_t i = 0; i < polygon.size(); ++i) {
+                const SDL_FPoint a = project(polygon[i]);
+                const SDL_FPoint b = project(polygon[(i + 1) % polygon.size()]);
+                if (!SDL_RenderLine(renderer_, a.x, a.y, b.x, b.y)) {
+                    SDL_Log("SDL_RenderLine for wireframe cube failed: %s", SDL_GetError());
+                    return false;
+                }
+            }
+        } else {
+            // Clipping can turn a quad into a larger polygon; triangulate it as a fan.
+            std::vector<SDL_Vertex> vertices;
+            vertices.reserve((polygon.size() - 2) * 3);
+            for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
+                vertices.push_back(makeVertex(polygon[0], face.color, project));
+                vertices.push_back(makeVertex(polygon[i], face.color, project));
+                vertices.push_back(makeVertex(polygon[i + 1], face.color, project));
+            }
+            if (!SDL_RenderGeometry(renderer_, nullptr, vertices.data(),
+                                    static_cast<int>(vertices.size()), nullptr, 0)) {
+                SDL_Log("SDL_RenderGeometry failed: %s", SDL_GetError());
+                return false;
+            }
         }
     }
 
@@ -292,8 +304,18 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                       return a.depth > b.depth;
                   });
         for (const TriangleToDraw& triangle : triangles) {
-            if (!SDL_RenderGeometry(renderer_, nullptr, triangle.vertices.data(), 3,
-                                    nullptr, 0)) {
+            if (wireframe) {
+                SDL_SetRenderDrawColor(renderer_, 120, 220, 255, 255);
+                for (std::size_t i = 0; i < triangle.vertices.size(); ++i) {
+                    const SDL_FPoint a = triangle.vertices[i].position;
+                    const SDL_FPoint b = triangle.vertices[(i + 1) % triangle.vertices.size()].position;
+                    if (!SDL_RenderLine(renderer_, a.x, a.y, b.x, b.y)) {
+                        SDL_Log("SDL_RenderLine for wireframe mesh failed: %s", SDL_GetError());
+                        return false;
+                    }
+                }
+            } else if (!SDL_RenderGeometry(renderer_, nullptr, triangle.vertices.data(), 3,
+                                           nullptr, 0)) {
                 SDL_Log("SDL_RenderGeometry for mesh failed: %s", SDL_GetError());
                 return false;
             }
@@ -315,7 +337,10 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     (void)SDL_RenderDebugText(renderer_, 12.0F, 44.0F,
                               "WASD Move | Q/E Up/Down | Shift Sprint");
     (void)SDL_RenderDebugText(renderer_, 12.0F, 60.0F,
-                              "1/2 Toggle Pyramids | Right-click Mouse Look | Esc Exit");
+                              "1/2 Toggle Pyramids | F3 Wireframe | Right-click Mouse Look | Esc Exit");
+    if (wireframe) {
+        (void)SDL_RenderDebugText(renderer_, 12.0F, 76.0F, "Wireframe: ON");
+    }
 
     SDL_RenderPresent(renderer_);
     return true;
