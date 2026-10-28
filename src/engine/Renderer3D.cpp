@@ -49,9 +49,9 @@ Renderer3D::Renderer3D(SDL_Renderer* renderer)
     }
 }
 
-void Renderer3D::render(int width, int height, double elapsedSeconds) {
+bool Renderer3D::render(int width, int height, double elapsedSeconds) {
     if (width <= 0 || height <= 0) {
-        return;
+        return false;
     }
 
     SDL_SetRenderDrawColor(renderer_, 12, 18, 31, 255);
@@ -144,11 +144,12 @@ void Renderer3D::render(int width, int height, double elapsedSeconds) {
         if (!SDL_RenderGeometry(renderer_, nullptr, vertices.data(),
                                 static_cast<int>(vertices.size()), nullptr, 0)) {
             SDL_Log("SDL_RenderGeometry failed: %s", SDL_GetError());
-            return;
+            return false;
         }
     }
 
     SDL_RenderPresent(renderer_);
+    return true;
 }
 
 } // namespace originalengine
