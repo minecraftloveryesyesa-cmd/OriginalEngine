@@ -15,6 +15,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(originalengine
     src/engine/Application.cpp
+    src/engine/Renderer3D.cpp
 )
 
 target_include_directories(originalengine
