@@ -19,6 +19,7 @@ add_library(originalengine
     src/engine/CollisionWorld.cpp
     src/engine/Renderer3D.cpp
     src/engine/Scene.cpp
+    src/engine/ObjMeshLoader.cpp
 )
 
 target_include_directories(originalengine
@@ -77,4 +78,8 @@ if(BUILD_TESTING)
     add_executable(originalengine_scene_tests tests/scene_tests.cpp)
     target_link_libraries(originalengine_scene_tests PRIVATE originalengine)
     add_test(NAME scene_management COMMAND originalengine_scene_tests)
+
+    add_executable(originalengine_obj_mesh_tests tests/obj_mesh_loader_tests.cpp)
+    target_link_libraries(originalengine_obj_mesh_tests PRIVATE originalengine)
+    add_test(NAME obj_mesh_loader COMMAND originalengine_obj_mesh_tests)
 endif()
