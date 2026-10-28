@@ -12,7 +12,8 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Wavefront OBJ geometry loader for vertices and faces, including polygon triangulation and negative indices
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
-- Animated perspective-projected 3D cube with six face colors
+- Animated perspective-projected 3D cube with six face colors and all three rotation axes
+- Loads and draws the bundled `assets/demo.obj` pyramid through the scene transform
 - World-space perspective floor grid that responds to camera movement
 - GitHub Actions builds the Windows executable, runs camera, collision, scene-management, and OBJ-loader unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
@@ -30,7 +31,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 
 ## OBJ mesh loader prototype
 
-`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. Rendering loaded meshes and loading materials/textures are not implemented yet.
+`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded into the demo scene and rendered with its object transform. Texture coordinates, normals, material files, clipping for triangles crossing the near plane, and texture/material rendering are not implemented yet.
 
 ## Collision prototype
 
