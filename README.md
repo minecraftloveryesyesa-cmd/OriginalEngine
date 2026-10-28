@@ -13,13 +13,14 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
 - On-screen debug overlay showing smoothed FPS, camera coordinates, and control hints
+- Near-plane clipping for cube faces and loaded mesh triangles, preserving the visible portion of geometry that crosses the camera's near plane
 - Animated perspective-projected 3D cube with six face colors and all three rotation axes
 - Renders multiple visible scene objects from shared OBJ mesh data, applying each object's position, rotation, scale, and visibility flag
 - Press 1 or 2 to toggle the visibility of each demo pyramid at runtime
 - World-space perspective floor grid that responds to camera movement
 - GitHub Actions builds the Windows executable, runs camera, collision, scene-management, and OBJ-loader unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
-> The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting uses a painter's algorithm; intersecting geometry and complex scenes will need a depth-buffer renderer later.
+> The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting still uses a painter's algorithm; intersecting geometry and complex scenes will need a depth-buffer renderer later. Geometry crossing the near plane is clipped instead of being discarded wholesale.
 
 ## Camera controls
 
@@ -36,7 +37,7 @@ The top-left debug overlay displays a smoothed FPS estimate, camera position (X/
 
 ## OBJ mesh loader prototype
 
-`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded once and instanced twice in the demo scene; each visible scene object is rendered with its own position, rotation, and scale. Scene objects marked invisible are skipped by the renderer. Texture coordinates, normals, material files, clipping for triangles crossing the near plane, and texture/material rendering are not implemented yet.
+`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded once and instanced twice in the demo scene; each visible scene object is rendered with its own position, rotation, and scale. Scene objects marked invisible are skipped by the renderer. Texture coordinates, normals, material files, and texture/material rendering are not implemented yet. Triangles crossing the camera's near plane are clipped in camera space before projection.
 
 ## Collision prototype
 
