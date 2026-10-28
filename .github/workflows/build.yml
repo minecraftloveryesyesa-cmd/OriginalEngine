@@ -36,5 +36,6 @@ jobs:
           path: |
             build/Release/originalengine_app.exe
             build/Release/SDL3.dll
+            build/Release/assets/demo.obj
           if-no-files-found: error
           retention-days: 14
