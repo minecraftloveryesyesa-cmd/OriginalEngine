@@ -1,5 +1,7 @@
 #include "engine/ObjMeshLoader.hpp"
 
+#include <array>
+
 #include <iostream>
 #include <sstream>
 #include <string>
