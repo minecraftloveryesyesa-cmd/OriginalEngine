@@ -13,7 +13,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
 - Animated perspective-projected 3D cube with six face colors and all three rotation axes
-- Loads and draws the bundled `assets/demo.obj` pyramid through the scene transform
+- Renders multiple visible scene objects from shared OBJ mesh data, applying each object's position, rotation, scale, and visibility flag
 - World-space perspective floor grid that responds to camera movement
 - GitHub Actions builds the Windows executable, runs camera, collision, scene-management, and OBJ-loader unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
@@ -31,7 +31,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 
 ## OBJ mesh loader prototype
 
-`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded into the demo scene and rendered with its object transform. Texture coordinates, normals, material files, clipping for triangles crossing the near plane, and texture/material rendering are not implemented yet.
+`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded once and instanced twice in the demo scene; each visible scene object is rendered with its own position, rotation, and scale. Scene objects marked invisible are skipped by the renderer. Texture coordinates, normals, material files, clipping for triangles crossing the near plane, and texture/material rendering are not implemented yet.
 
 ## Collision prototype
 
@@ -79,6 +79,6 @@ tests/                Automated camera, collision, and scene tests
 2. First 3D projection and colored cube
 3. First-person camera and movement
 4. GPU-backed rendering and depth testing
-5. Render scene objects and loaded meshes
+5. Scene object instances and loaded mesh rendering
 6. Texture/material loading, audio, and physics
 7. Platform support expansion
