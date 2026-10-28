@@ -1,6 +1,8 @@
 #include "engine/Camera.hpp"
 #include "engine/CollisionWorld.hpp"
 #include "engine/Renderer3D.hpp"
+#include "engine/ObjMeshLoader.hpp"
+#include "engine/Scene.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -60,6 +62,27 @@ int main(int argc, char* argv[]) {
         originalengine::Renderer3D renderer3D(renderer);
         originalengine::Camera camera;
         originalengine::CollisionWorld collisionWorld;
+        originalengine::Mesh demoMesh;
+        std::string meshError;
+        if (!originalengine::ObjMeshLoader::loadFromFile("assets/demo.obj", demoMesh, &meshError)) {
+            std::cerr << "[OriginalEngine] Could not load assets/demo.obj: "
+                      << meshError << '\\n';
+            exitCode = 1;
+        }
+        originalengine::Scene scene;
+        originalengine::Transform demoTransform;
+        demoTransform.position = {2.6F, -0.2F, 7.0F};
+        demoTransform.rotation = {0.0F, 0.25F, 0.0F};
+        demoTransform.scale = {0.9F, 0.9F, 0.9F};
+        if (!scene.addObject("DemoPyramid", demoTransform)) {
+            std::cerr << "[OriginalEngine] Could not create demo scene object.\\n";
+            exitCode = 1;
+        }
+        const originalengine::SceneObject* demoObject = scene.findObject("DemoPyramid");
+        if (demoObject == nullptr) {
+            std::cerr << "[OriginalEngine] Demo scene object was not found.\\n";
+            exitCode = 1;
+        }
         // Conservative static bounds around the demo cube.
         collisionWorld.addObstacle({-1.4F, -1.4F, 2.8F, 1.4F, 1.4F, 5.6F});
         bool running = true;
@@ -67,7 +90,7 @@ int main(int argc, char* argv[]) {
         Uint64 previousTicks = SDL_GetTicks();
         double elapsedSeconds = 0.0;
 
-        while (running) {
+        while (running && exitCode == 0) {
             SDL_Event event{};
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_EVENT_QUIT) {
@@ -122,7 +145,9 @@ int main(int argc, char* argv[]) {
             int height = 0;
             SDL_GetWindowSize(window, &width, &height);
 
-            if (!renderer3D.render(width, height, elapsedSeconds, camera)) {
+            if (!renderer3D.render(width, height, elapsedSeconds, camera,
+                                  &demoMesh,
+                                  demoObject != nullptr ? &demoObject->transform : nullptr)) {
                 std::cerr << "[OriginalEngine] Rendering a frame failed.\n";
                 exitCode = 1;
                 break;
