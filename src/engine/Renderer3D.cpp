@@ -249,6 +249,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 SDL_Log("SDL_RenderGeometry for mesh failed: %s", SDL_GetError());
                 return false;
             }
+        }
     }
 
     SDL_RenderPresent(renderer_);
