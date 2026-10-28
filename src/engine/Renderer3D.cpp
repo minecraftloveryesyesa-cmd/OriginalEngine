@@ -1,5 +1,7 @@
 #include "engine/Renderer3D.hpp"
 
+#include "engine/Camera.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -7,8 +9,6 @@
 
 namespace originalengine {
 namespace {
-
-constexpr float kPi = 3.14159265358979323846F;
 
 struct Vec3 {
     float x;
@@ -34,10 +34,11 @@ Vec3 rotateY(Vec3 p, float angle) {
     return {p.x * c + p.z * s, p.y, -p.x * s + p.z * c};
 }
 
-Vec3 rotateZ(Vec3 p, float angle) {
-    const float c = std::cos(angle);
-    const float s = std::sin(angle);
-    return {p.x * c - p.y * s, p.x * s + p.y * c, p.z};
+Vec3 toCameraSpace(Vec3 world, const Camera& camera) {
+    Vec3 p{world.x - camera.x(), world.y - camera.y(), world.z - camera.z()};
+    p = rotateY(p, -camera.yaw());
+    p = rotateX(p, camera.pitch());
+    return p;
 }
 
 } // namespace
@@ -49,7 +50,8 @@ Renderer3D::Renderer3D(SDL_Renderer* renderer)
     }
 }
 
-bool Renderer3D::render(int width, int height, double elapsedSeconds) {
+bool Renderer3D::render(int width, int height, double elapsedSeconds,
+                        const Camera& camera) {
     if (width <= 0 || height <= 0) {
         return false;
     }
@@ -57,19 +59,40 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds) {
     SDL_SetRenderDrawColor(renderer_, 12, 18, 31, 255);
     SDL_RenderClear(renderer_);
 
-    // A subtle perspective grid makes the depth of the scene easier to read.
+    const float scale = static_cast<float>(std::min(width, height)) * 0.42F;
+    const float centerX = static_cast<float>(width) * 0.5F;
+    const float centerY = static_cast<float>(height) * 0.5F;
+    constexpr float focalLength = 2.4F;
+    constexpr float nearPlane = 0.08F;
+
+    auto project = [&](Vec3 p) -> SDL_FPoint {
+        const float perspective = focalLength / p.z;
+        return {centerX + p.x * scale * perspective,
+                centerY - p.y * scale * perspective};
+    };
+
+    // Render a world-space floor grid, so it responds naturally to camera movement.
     SDL_SetRenderDrawColor(renderer_, 31, 43, 61, 255);
-    const float horizon = static_cast<float>(height) * 0.60F;
-    for (int i = -10; i <= 10; ++i) {
-        const float x = static_cast<float>(width) * 0.5F +
-                        static_cast<float>(i) * static_cast<float>(width) * 0.045F;
-        SDL_RenderLine(renderer_, static_cast<float>(width) * 0.5F, horizon,
-                       x, static_cast<float>(height));
+    auto drawGridLine = [&](Vec3 a, Vec3 b) {
+        const Vec3 cameraA = toCameraSpace(a, camera);
+        const Vec3 cameraB = toCameraSpace(b, camera);
+        if (cameraA.z <= nearPlane || cameraB.z <= nearPlane) {
+            return;
+        }
+        const SDL_FPoint pa = project(cameraA);
+        const SDL_FPoint pb = project(cameraB);
+        SDL_RenderLine(renderer_, pa.x, pa.y, pb.x, pb.y);
+    };
+
+    constexpr float floorY = -1.5F;
+    for (int i = -20; i <= 20; ++i) {
+        const float coordinate = static_cast<float>(i) * 1.0F;
+        drawGridLine({coordinate, floorY, -20.0F},
+                     {coordinate, floorY, 40.0F});
     }
-    for (int i = 1; i <= 8; ++i) {
-        const float t = static_cast<float>(i) / 8.0F;
-        const float y = horizon + (static_cast<float>(height) - horizon) * t * t;
-        SDL_RenderLine(renderer_, 0.0F, y, static_cast<float>(width), y);
+    for (int i = -2; i <= 40; ++i) {
+        const float z = static_cast<float>(i);
+        drawGridLine({-20.0F, floorY, z}, {20.0F, floorY, z});
     }
 
     const std::array<Vec3, 8> cube{{
@@ -88,9 +111,8 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds) {
     for (std::size_t i = 0; i < cube.size(); ++i) {
         Vec3 p = rotateX(cube[i], angleX);
         p = rotateY(p, angleY);
-        p = rotateZ(p, angleZ);
-        p.z += 4.2F; // Move the cube in front of the camera.
-        transformed[i] = p;
+        p.z += 4.2F;
+        transformed[i] = toCameraSpace(p, camera);
     }
 
     const std::array<Face, 6> baseFaces{{
@@ -114,20 +136,18 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds) {
     std::sort(faces.begin(), faces.end(),
               [](const Face& a, const Face& b) { return a.depth > b.depth; });
 
-    const float scale = static_cast<float>(std::min(width, height)) * 0.42F;
-    const float centerX = static_cast<float>(width) * 0.5F;
-    const float centerY = static_cast<float>(height) * 0.43F;
-    constexpr float focalLength = 2.4F;
-
-    auto project = [&](Vec3 p) -> SDL_FPoint {
-        const float perspective = focalLength / p.z;
-        return {
-            centerX + p.x * scale * perspective,
-            centerY - p.y * scale * perspective
-        };
-    };
-
     for (const Face& face : faces) {
+        bool fullyInFront = true;
+        for (const int index : face.indices) {
+            if (transformed[static_cast<std::size_t>(index)].z <= nearPlane) {
+                fullyInFront = false;
+                break;
+            }
+        }
+        if (!fullyInFront) {
+            continue;
+        }
+
         std::array<SDL_Vertex, 6> vertices{};
         const std::array<int, 6> triangleIndices{{
             face.indices[0], face.indices[1], face.indices[2],
