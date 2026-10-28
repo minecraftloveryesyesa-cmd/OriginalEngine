@@ -102,6 +102,7 @@ int main(int argc, char* argv[]) {
         collisionWorld.addObstacle({-1.4F, -1.4F, 2.8F, 1.4F, 1.4F, 5.6F});
         bool running = true;
         bool mouseCaptured = false;
+        bool wireframe = false;
         Uint64 previousTicks = SDL_GetTicks();
         double elapsedSeconds = 0.0;
 
@@ -110,6 +111,9 @@ int main(int argc, char* argv[]) {
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_EVENT_QUIT) {
                     running = false;
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_F3) {
+                    wireframe = !wireframe;
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_1 &&
                            demoObject != nullptr) {
@@ -169,7 +173,7 @@ int main(int argc, char* argv[]) {
             SDL_GetWindowSize(window, &width, &height);
 
             if (!renderer3D.render(width, height, elapsedSeconds, camera,
-                                  meshInstances)) {
+                                  meshInstances, wireframe)) {
                 std::cerr << "[OriginalEngine] Rendering a frame failed.\n";
                 exitCode = 1;
                 break;
