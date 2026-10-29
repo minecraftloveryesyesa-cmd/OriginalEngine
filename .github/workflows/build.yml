@@ -37,5 +37,6 @@ jobs:
             build/Release/originalengine_app.exe
             build/Release/SDL3.dll
             build/Release/assets/demo.obj
+            build/Release/assets/demo_texture.ppm
           if-no-files-found: error
           retention-days: 14
