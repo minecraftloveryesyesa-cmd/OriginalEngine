@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "engine/Scene.hpp"
@@ -14,6 +16,13 @@ struct Mesh;
 struct MeshInstance {
     const Mesh* mesh{nullptr};
     const SceneObject* object{nullptr};
+    std::string texturePath{};
+};
+
+struct TextureImage {
+    int width{0};
+    int height{0};
+    std::vector<Uint8> pixels;
 };
 
 // A perspective-projected 3D renderer with a movable first-person camera.
@@ -37,6 +46,7 @@ private:
     int textureHeight_{0};
     std::vector<Uint8> colorBuffer_;
     std::vector<float> depthBuffer_;
+    std::unordered_map<std::string, TextureImage> textureCache_;
     double previousElapsedSeconds_{0.0};
     float smoothedFramesPerSecond_{0.0F};
 };
