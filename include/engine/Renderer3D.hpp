@@ -39,6 +39,8 @@ public:
                               const std::vector<MeshInstance>& meshInstances = {},
                               bool wireframe = false);
 
+    [[nodiscard]] static SDL_Point softwareRenderSize(int width, int height) noexcept;
+
 private:
     SDL_Renderer* renderer_;
     SDL_Texture* depthTexture_{nullptr};

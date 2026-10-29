@@ -170,7 +170,11 @@ int main(int argc, char* argv[]) {
 
             int width = 0;
             int height = 0;
-            SDL_GetWindowSize(window, &width, &height);
+            if (!SDL_GetRenderOutputSize(renderer, &width, &height)) {
+                logSdlError("SDL_GetRenderOutputSize");
+                exitCode = 1;
+                break;
+            }
 
             if (!renderer3D.render(width, height, elapsedSeconds, camera,
                                   meshInstances, wireframe)) {

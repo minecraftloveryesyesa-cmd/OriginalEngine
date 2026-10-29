@@ -88,4 +88,8 @@ if(BUILD_TESTING)
     add_executable(originalengine_obj_mesh_tests tests/obj_mesh_loader_tests.cpp)
     target_link_libraries(originalengine_obj_mesh_tests PRIVATE originalengine)
     add_test(NAME obj_mesh_loader COMMAND originalengine_obj_mesh_tests)
+
+    add_executable(originalengine_renderer3d_tests tests/renderer3d_tests.cpp)
+    target_link_libraries(originalengine_renderer3d_tests PRIVATE originalengine)
+    add_test(NAME renderer_software_size COMMAND originalengine_renderer3d_tests)
 endif()

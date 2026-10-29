@@ -12,6 +12,7 @@
 #include <string>
 #include <cctype>
 #include <limits>
+#include <new>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -89,7 +90,8 @@ bool loadPpmTexture(const std::string& path, TextureImage& texture) {
 }
 
 SDL_Color sampleTexture(const TextureImage& texture, float u, float v) {
-    if (texture.width <= 0 || texture.height <= 0 || texture.pixels.empty()) {
+    if (texture.width <= 0 || texture.height <= 0 || texture.pixels.empty() ||
+        !std::isfinite(u) || !std::isfinite(v)) {
         return {255, 255, 255, 255};
     }
     u -= std::floor(u);
@@ -202,24 +204,39 @@ void rasterizeTriangle(
         return;
     }
 
+    if (depths[0] <= 0.0F || depths[1] <= 0.0F || depths[2] <= 0.0F) {
+        return;
+    }
+
+    const float inverseArea = 1.0F / area;
     const float invZ0 = 1.0F / depths[0];
     const float invZ1 = 1.0F / depths[1];
     const float invZ2 = 1.0F / depths[2];
+    const float w0StepX = (points[1].y - points[2].y) * inverseArea;
+    const float w0StepY = (points[2].x - points[1].x) * inverseArea;
+    const float w1StepX = (points[2].y - points[0].y) * inverseArea;
+    const float w1StepY = (points[0].x - points[2].x) * inverseArea;
+    const float startX = static_cast<float>(left) + 0.5F;
+    const float startY = static_cast<float>(top) + 0.5F;
+    float rowW0 = ((points[1].x - startX) * (points[2].y - startY) -
+                   (points[1].y - startY) * (points[2].x - startX)) * inverseArea;
+    float rowW1 = ((points[2].x - startX) * (points[0].y - startY) -
+                   (points[2].y - startY) * (points[0].x - startX)) * inverseArea;
     for (int y = top; y <= bottom; ++y) {
+        float w0 = rowW0;
+        float w1 = rowW1;
         for (int x = left; x <= right; ++x) {
-            const float px = static_cast<float>(x) + 0.5F;
-            const float py = static_cast<float>(y) + 0.5F;
-            const float w0 = ((points[1].x - px) * (points[2].y - py) -
-                              (points[1].y - py) * (points[2].x - px)) / area;
-            const float w1 = ((points[2].x - px) * (points[0].y - py) -
-                              (points[2].y - py) * (points[0].x - px)) / area;
             const float w2 = 1.0F - w0 - w1;
             if (w0 < -1.0e-5F || w1 < -1.0e-5F || w2 < -1.0e-5F) {
+                w0 += w0StepX;
+                w1 += w1StepX;
                 continue;
             }
 
             const float reciprocalDepth = w0 * invZ0 + w1 * invZ1 + w2 * invZ2;
             if (reciprocalDepth <= 0.0F) {
+                w0 += w0StepX;
+                w1 += w1StepX;
                 continue;
             }
             const float depth = 1.0F / reciprocalDepth;
@@ -227,6 +244,8 @@ void rasterizeTriangle(
                                       static_cast<std::size_t>(width) +
                                       static_cast<std::size_t>(x);
             if (depth >= depthBuffer[pixel]) {
+                w0 += w0StepX;
+                w1 += w1StepX;
                 continue;
             }
             depthBuffer[pixel] = depth;
@@ -234,12 +253,12 @@ void rasterizeTriangle(
             const float colorWeight0 = w0 * invZ0 / reciprocalDepth;
             const float colorWeight1 = w1 * invZ1 / reciprocalDepth;
             const float colorWeight2 = w2 * invZ2 / reciprocalDepth;
-            const auto interpolateChannel = [&](Uint8 SDL_Color::*channel) {
-                const float value =
-                    static_cast<float>(colors[0].*channel) * colorWeight0 +
-                    static_cast<float>(colors[1].*channel) * colorWeight1 +
-                    static_cast<float>(colors[2].*channel) * colorWeight2;
-                return static_cast<Uint8>(std::clamp(value, 0.0F, 255.0F));
+            const auto interpolateChannel = [colorWeight0, colorWeight1, colorWeight2](
+                                                Uint8 first, Uint8 second, Uint8 third) {
+                return static_cast<Uint8>(std::clamp(
+                    static_cast<float>(first) * colorWeight0 +
+                    static_cast<float>(second) * colorWeight1 +
+                    static_cast<float>(third) * colorWeight2, 0.0F, 255.0F));
             };
             SDL_Color texel{255, 255, 255, 255};
             if (texture != nullptr && texCoords != nullptr) {
@@ -252,14 +271,18 @@ void rasterizeTriangle(
                 texel = sampleTexture(*texture, u, v);
             }
             colorBuffer[offset] = static_cast<Uint8>(
-                static_cast<unsigned int>(interpolateChannel(&SDL_Color::r)) * texel.r / 255U);
+                static_cast<unsigned int>(interpolateChannel(colors[0].r, colors[1].r, colors[2].r)) * texel.r / 255U);
             colorBuffer[offset + 1U] = static_cast<Uint8>(
-                static_cast<unsigned int>(interpolateChannel(&SDL_Color::g)) * texel.g / 255U);
+                static_cast<unsigned int>(interpolateChannel(colors[0].g, colors[1].g, colors[2].g)) * texel.g / 255U);
             colorBuffer[offset + 2U] = static_cast<Uint8>(
-                static_cast<unsigned int>(interpolateChannel(&SDL_Color::b)) * texel.b / 255U);
+                static_cast<unsigned int>(interpolateChannel(colors[0].b, colors[1].b, colors[2].b)) * texel.b / 255U);
             colorBuffer[offset + 3U] = static_cast<Uint8>(
-                static_cast<unsigned int>(interpolateChannel(&SDL_Color::a)) * texel.a / 255U);
+                static_cast<unsigned int>(interpolateChannel(colors[0].a, colors[1].a, colors[2].a)) * texel.a / 255U);
+            w0 += w0StepX;
+            w1 += w1StepX;
         }
+        rowW0 += w0StepY;
+        rowW1 += w1StepY;
     }
 }
 
@@ -323,11 +346,37 @@ Renderer3D::~Renderer3D() {
     }
 }
 
+SDL_Point Renderer3D::softwareRenderSize(int width, int height) noexcept {
+    constexpr std::size_t maximumPixels = 800U * 450U;
+    if (width <= 0 || height <= 0) {
+        return {0, 0};
+    }
+
+    const std::size_t pixelCount = static_cast<std::size_t>(width) *
+                                   static_cast<std::size_t>(height);
+    if (pixelCount <= maximumPixels) {
+        return {width, height};
+    }
+
+    const float scale = std::sqrt(static_cast<float>(maximumPixels) /
+                                  static_cast<float>(pixelCount));
+    return {
+        std::max(1, static_cast<int>(std::floor(static_cast<float>(width) * scale))),
+        std::max(1, static_cast<int>(std::floor(static_cast<float>(height) * scale)))
+    };
+}
+
 bool Renderer3D::render(int width, int height, double elapsedSeconds,
                         const Camera& camera,
                         const std::vector<MeshInstance>& meshInstances, bool wireframe) {
     if (width <= 0 || height <= 0) {
         return false;
+    }
+
+    if (!wireframe) {
+        const SDL_Point softwareSize = softwareRenderSize(width, height);
+        width = softwareSize.x;
+        height = softwareSize.y;
     }
 
     if (previousElapsedSeconds_ > 0.0) {
@@ -360,12 +409,19 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             SDL_Log("Could not set depth-buffer texture blend mode: %s", SDL_GetError());
             return false;
         }
+        try {
+            colorBuffer_.resize(static_cast<std::size_t>(width) *
+                                static_cast<std::size_t>(height) * 4U);
+            depthBuffer_.resize(static_cast<std::size_t>(width) *
+                                static_cast<std::size_t>(height));
+        } catch (const std::bad_alloc&) {
+            SDL_Log("Could not allocate software render buffers.");
+            SDL_DestroyTexture(depthTexture_);
+            depthTexture_ = nullptr;
+            return false;
+        }
         textureWidth_ = width;
         textureHeight_ = height;
-        colorBuffer_.resize(static_cast<std::size_t>(width) *
-                            static_cast<std::size_t>(height) * 4U);
-        depthBuffer_.resize(static_cast<std::size_t>(width) *
-                            static_cast<std::size_t>(height));
     }
     if (!wireframe) {
         std::fill(colorBuffer_.begin(), colorBuffer_.end(), Uint8{0});
