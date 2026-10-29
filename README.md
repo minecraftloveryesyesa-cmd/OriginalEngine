@@ -9,7 +9,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - First-person camera with WASD movement and mouse-look
 - Axis-aligned collision world; camera movement is blocked by obstacles and slides along walls
 - Basic scene registry with unique object names, transform data, visibility flags, lookup, and removal
-- Wavefront OBJ geometry loader for vertices and faces, including polygon triangulation and negative indices
+- Wavefront OBJ loader for positions, optional UV coordinates and normals, polygon triangulation, negative indices, and per-corner attribute indexing
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
 - On-screen debug overlay showing smoothed FPS, camera coordinates, and control hints
@@ -41,7 +41,7 @@ The top-left debug overlay displays a smoothed FPS estimate, camera position (X/
 
 ## OBJ mesh loader prototype
 
-`ObjMeshLoader` reads Wavefront OBJ geometry (`v` and `f` records), triangulates polygon faces, supports positive and negative vertex indices, and ignores texture/normal/material records for now. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded once and instanced twice in the demo scene; each visible scene object is rendered with its own position, rotation, and scale. Scene objects marked invisible are skipped by the renderer. Texture coordinates, normals, material files, and texture/material rendering are not implemented yet. Triangles crossing the camera's near plane are clipped in camera space before projection.
+`ObjMeshLoader` reads Wavefront OBJ positions (`v`), texture coordinates (`vt`), normals (`vn`), and faces (`f`), triangulates polygon faces, and supports positive and negative indices for each attribute. Vertices are split when a single position is referenced with different UV or normal indices. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded once and instanced twice in the demo scene; each visible scene object is rendered with its own position, rotation, and scale. Scene objects marked invisible are skipped by the renderer. UV coordinates and normals are now preserved in the loaded mesh data, but the renderer does not yet use them for lighting or texture mapping. Material files and texture/material rendering are not implemented yet. Triangles crossing the camera's near plane are clipped in camera space before projection.
 
 ## Collision prototype
 
@@ -107,7 +107,7 @@ OriginalEngine は、C++20 を基盤として開発しているクロスプラ�
 - WASD 移動とマウス視点操作に対応した一人称カメラ
 - 軸平行境界ボックス（AABB）による衝突判定。障害物への進入を防ぎ、壁に沿った移動が可能
 - オブジェクト名の一意性、Transform、表示・非表示、検索、削除に対応した基本的なシーン管理
-- Wavefront OBJ の頂点・面データ読み込み。多角形の三角形分割と負の頂点インデックスに対応
+- Wavefront OBJ の頂点・UV 座標・法線・面データ読み込み。多角形の三角形分割と各属性の負のインデックスに対応
 - Q/E キーによる上下移動、Shift キーによる高速移動
 - 右クリックでマウス捕捉を切り替え、Esc キーで捕捉解除または終了
 - FPS、カメラ座標、操作ヒントを表示するデバッグ HUD
@@ -137,9 +137,9 @@ OriginalEngine は、C++20 を基盤として開発しているクロスプラ�
 
 ## OBJ メッシュローダー（試作）
 
-`ObjMeshLoader` は Wavefront OBJ の `v`（頂点）と `f`（面）レコードを読み込みます。多角形の面を三角形に分割し、正の頂点インデックスと負の頂点インデックスの両方に対応します。現時点では、テクスチャ座標・法線・マテリアルのレコードは読み込み対象外です。面のインデックスを検証し、読み込みに失敗した場合は呼び出し元の既存メッシュを変更しません。
+`ObjMeshLoader` は Wavefront OBJ の `v`（頂点）と `f`（面）レコードを読み込みます。多角形の面を三角形に分割し、正の頂点インデックスと負の頂点インデックスの両方に対応します。UV 座標と法線はメッシュデータに保持されますが、描画時のテクスチャマッピングやライティングにはまだ使用していません。マテリアルファイルとテクスチャ描画は未実装です。面のインデックスを検証し、読み込みに失敗した場合は呼び出し元の既存メッシュを変更しません。
 
-同梱の `assets/demo.obj` にあるピラミッドは一度読み込まれ、デモシーン内の 2 つのオブジェクトで共有されます。表示状態のオブジェクトは、それぞれの位置・回転・拡大縮小を反映して描画されます。非表示に設定されたオブジェクトは描画されません。テクスチャ座標、法線、マテリアルファイル、テクスチャやマテリアルを使った描画は未実装です。カメラの近接平面を横切る三角形は、投影の前にカメラ座標系でクリッピングされます。
+同梱の `assets/demo.obj` にあるピラミッドは一度読み込まれ、デモシーン内の 2 つのオブジェクトで共有されます。表示状態のオブジェクトは、それぞれの位置・回転・拡大縮小を反映して描画されます。非表示に設定されたオブジェクトは描画されません。UV 座標と法線はメッシュデータに保持されますが、描画時のテクスチャマッピングやライティングにはまだ使用していません。マテリアルファイルとテクスチャ描画は未実装です。カメラの近接平面を横切る三角形は、投影の前にカメラ座標系でクリッピングされます。
 
 ## 衝突判定（試作）
 
