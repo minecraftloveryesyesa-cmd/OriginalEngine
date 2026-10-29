@@ -8,6 +8,9 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
+#include <string>
+#include <cctype>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -20,6 +23,86 @@ struct Face {
     std::array<int, 4> indices;
     SDL_Color color;
 };
+
+bool readPpmToken(std::istream& input, std::string& token) {
+    token.clear();
+    char ch = 0;
+    while (input.get(ch)) {
+        if (ch == '#') {
+            input.ignore(std::numeric_limits<std::streamsize>::max(), '\\n');
+            continue;
+        }
+        if (!std::isspace(static_cast<unsigned char>(ch))) {
+            token.push_back(ch);
+            break;
+        }
+    }
+    while (input.get(ch)) {
+        if (std::isspace(static_cast<unsigned char>(ch))) break;
+        token.push_back(ch);
+    }
+    return !token.empty();
+}
+
+bool loadPpmTexture(const std::string& path, TextureImage& texture) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) return false;
+    std::string token;
+    if (!readPpmToken(input, token) || token != "P3") return false;
+    auto readPositiveInt = [&](int& value) {
+        if (!readPpmToken(input, token)) return false;
+        try {
+            std::size_t consumed = 0;
+            const int parsed = std::stoi(token, &consumed);
+            if (consumed != token.size() || parsed <= 0) return false;
+            value = parsed;
+            return true;
+        } catch (...) { return false; }
+    };
+    int width = 0, height = 0, maxValue = 0;
+    if (!readPositiveInt(width) || !readPositiveInt(height) ||
+        !readPositiveInt(maxValue) || maxValue > 65535) return false;
+    const auto pixelCount = static_cast<std::size_t>(width) *
+                            static_cast<std::size_t>(height);
+    if (pixelCount > 16U * 1024U * 1024U) return false;
+    TextureImage loaded;
+    loaded.width = width;
+    loaded.height = height;
+    loaded.pixels.resize(pixelCount * 4U);
+    for (std::size_t i = 0; i < pixelCount; ++i) {
+        for (std::size_t channel = 0; channel < 3; ++channel) {
+            if (!readPpmToken(input, token)) return false;
+            int value = 0;
+            try {
+                std::size_t consumed = 0;
+                value = std::stoi(token, &consumed);
+                if (consumed != token.size() || value < 0 || value > maxValue) return false;
+            } catch (...) { return false; }
+            loaded.pixels[i * 4U + channel] = static_cast<Uint8>(
+                (static_cast<unsigned int>(value) * 255U) /
+                static_cast<unsigned int>(maxValue));
+        }
+        loaded.pixels[i * 4U + 3U] = 255;
+    }
+    texture = std::move(loaded);
+    return true;
+}
+
+SDL_Color sampleTexture(const TextureImage& texture, float u, float v) {
+    if (texture.width <= 0 || texture.height <= 0 || texture.pixels.empty()) {
+        return {255, 255, 255, 255};
+    }
+    u -= std::floor(u);
+    v -= std::floor(v);
+    const int x = std::clamp(static_cast<int>(u * texture.width), 0, texture.width - 1);
+    const int y = std::clamp(static_cast<int>((1.0F - v) * texture.height),
+                             0, texture.height - 1);
+    const std::size_t offset = (static_cast<std::size_t>(y) *
+                                static_cast<std::size_t>(texture.width) +
+                                static_cast<std::size_t>(x)) * 4U;
+    return {texture.pixels[offset], texture.pixels[offset + 1U],
+            texture.pixels[offset + 2U], texture.pixels[offset + 3U]};
+}
 
 Vec3 rotateX(Vec3 p, float angle) {
     const float c = std::cos(angle);
@@ -97,7 +180,9 @@ void rasterizeTriangle(
     const std::array<float, 3>& depths,
     const std::array<SDL_Color, 3>& colors,
     std::vector<Uint8>& colorBuffer,
-    std::vector<float>& depthBuffer) {
+    std::vector<float>& depthBuffer,
+    const std::array<SDL_FPoint, 3>* texCoords = nullptr,
+    const TextureImage* texture = nullptr) {
     const float area =
         (points[1].x - points[0].x) * (points[2].y - points[0].y) -
         (points[1].y - points[0].y) * (points[2].x - points[0].x);
@@ -156,10 +241,24 @@ void rasterizeTriangle(
                     static_cast<float>(colors[2].*channel) * colorWeight2;
                 return static_cast<Uint8>(std::clamp(value, 0.0F, 255.0F));
             };
-            colorBuffer[offset] = interpolateChannel(&SDL_Color::r);
-            colorBuffer[offset + 1U] = interpolateChannel(&SDL_Color::g);
-            colorBuffer[offset + 2U] = interpolateChannel(&SDL_Color::b);
-            colorBuffer[offset + 3U] = interpolateChannel(&SDL_Color::a);
+            SDL_Color texel{255, 255, 255, 255};
+            if (texture != nullptr && texCoords != nullptr) {
+                const float u = (texCoords[0].x * w0 * invZ0 +
+                                 texCoords[1].x * w1 * invZ1 +
+                                 texCoords[2].x * w2 * invZ2) / reciprocalDepth;
+                const float v = (texCoords[0].y * w0 * invZ0 +
+                                 texCoords[1].y * w1 * invZ1 +
+                                 texCoords[2].y * w2 * invZ2) / reciprocalDepth;
+                texel = sampleTexture(*texture, u, v);
+            }
+            colorBuffer[offset] = static_cast<Uint8>(
+                static_cast<unsigned int>(interpolateChannel(&SDL_Color::r)) * texel.r / 255U);
+            colorBuffer[offset + 1U] = static_cast<Uint8>(
+                static_cast<unsigned int>(interpolateChannel(&SDL_Color::g)) * texel.g / 255U);
+            colorBuffer[offset + 2U] = static_cast<Uint8>(
+                static_cast<unsigned int>(interpolateChannel(&SDL_Color::b)) * texel.b / 255U);
+            colorBuffer[offset + 3U] = static_cast<Uint8>(
+                static_cast<unsigned int>(interpolateChannel(&SDL_Color::a)) * texel.a / 255U);
         }
     }
 }
@@ -401,10 +500,27 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         }
         const Mesh& mesh = *instance.mesh;
         const Transform& meshTransform = instance.object->transform;
+        const TextureImage* meshTexture = nullptr;
+        if (!instance.texturePath.empty()) {
+            auto cached = textureCache_.find(instance.texturePath);
+            if (cached == textureCache_.end()) {
+                TextureImage loaded;
+                if (loadPpmTexture(instance.texturePath, loaded)) {
+                    cached = textureCache_.emplace(instance.texturePath, std::move(loaded)).first;
+                } else {
+                    SDL_Log("Could not load P3 PPM texture '%s'; rendering without texture.",
+                            instance.texturePath.c_str());
+                    cached = textureCache_.emplace(instance.texturePath, TextureImage{}).first;
+                }
+            }
+            if (cached->second.width > 0) meshTexture = &cached->second;
+        }
         struct TriangleToDraw {
             std::array<SDL_Vertex, 3> vertices;
             std::array<float, 3> depths;
             std::array<SDL_Color, 3> colors{};
+            std::array<SDL_FPoint, 3> texCoords{};
+            bool hasTexCoords{false};
         };
         std::vector<TriangleToDraw> triangles;
         triangles.reserve(mesh.triangles.size());
@@ -500,6 +616,10 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     sourceVertices[0] != nullptr && sourceVertices[0]->hasNormal &&
                     sourceVertices[1] != nullptr && sourceVertices[1]->hasNormal &&
                     sourceVertices[2] != nullptr && sourceVertices[2]->hasNormal;
+                item.hasTexCoords = triangleFullyInFront && meshTexture != nullptr &&
+                    sourceVertices[0] != nullptr && sourceVertices[0]->hasTexCoord &&
+                    sourceVertices[1] != nullptr && sourceVertices[1]->hasTexCoord &&
+                    sourceVertices[2] != nullptr && sourceVertices[2]->hasTexCoord;
                 for (std::size_t corner = 0; corner < 3; ++corner) {
                     SDL_Color vertexColor = flatColor;
                     if (hasVertexNormals) {
@@ -542,6 +662,9 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     item.colors[corner] = vertexColor;
                     item.vertices[corner] = makeVertex(points[corner], vertexColor, project);
                     item.depths[corner] = points[corner].z;
+                    if (sourceVertices[corner] != nullptr) {
+                        item.texCoords[corner] = {sourceVertices[corner]->u, sourceVertices[corner]->v};
+                    }
                 }
                 triangles.push_back(item);
             }
@@ -566,7 +689,9 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     depths[corner] = triangle.depths[corner];
                 }
                 rasterizeTriangle(width, height, projected, depths, triangle.colors,
-                                  colorBuffer_, depthBuffer_);
+                                  colorBuffer_, depthBuffer_,
+                                  triangle.hasTexCoords ? &triangle.texCoords : nullptr,
+                                  triangle.hasTexCoords ? meshTexture : nullptr);
             }
         }
     }
