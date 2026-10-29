@@ -391,6 +391,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         struct TriangleToDraw {
             std::array<SDL_Vertex, 3> vertices;
             std::array<float, 3> depths;
+            SDL_Color color{};
         };
         std::vector<TriangleToDraw> triangles;
         triangles.reserve(mesh.triangles.size());
@@ -427,14 +428,51 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 continue;
             }
 
-            TriangleToDraw item{};
-            const SDL_Color colors[3] = {
-                {64, 184, 240, 255}, {82, 184, 240, 255}, {64, 184, 220, 255}
-            };
             for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
                 const Vec3 points[3] = {polygon[0], polygon[i], polygon[i + 1]};
+
+                // Flat diffuse lighting from the triangle's camera-space face normal.
+                const Vec3 edgeA{
+                    points[1].x - points[0].x,
+                    points[1].y - points[0].y,
+                    points[1].z - points[0].z
+                };
+                const Vec3 edgeB{
+                    points[2].x - points[0].x,
+                    points[2].y - points[0].y,
+                    points[2].z - points[0].z
+                };
+                Vec3 normal{
+                    edgeA.y * edgeB.z - edgeA.z * edgeB.y,
+                    edgeA.z * edgeB.x - edgeA.x * edgeB.z,
+                    edgeA.x * edgeB.y - edgeA.y * edgeB.x
+                };
+                const float normalLength = std::sqrt(
+                    normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+                if (normalLength > 1.0e-6F) {
+                    normal.x /= normalLength;
+                    normal.y /= normalLength;
+                    normal.z /= normalLength;
+                }
+
+                constexpr Vec3 lightDirection{0.35F, 0.75F, -0.55F};
+                constexpr float lightLength = 0.99624294F;
+                const float diffuse = std::abs(
+                    normal.x * lightDirection.x +
+                    normal.y * lightDirection.y +
+                    normal.z * lightDirection.z) / lightLength;
+                const float intensity = 0.24F + 0.76F * std::clamp(diffuse, 0.0F, 1.0F);
+
+                TriangleToDraw item{};
+                constexpr SDL_Color baseColor{72, 190, 238, 255};
+                item.color = {
+                    static_cast<Uint8>(static_cast<float>(baseColor.r) * intensity),
+                    static_cast<Uint8>(static_cast<float>(baseColor.g) * intensity),
+                    static_cast<Uint8>(static_cast<float>(baseColor.b) * intensity),
+                    baseColor.a
+                };
                 for (std::size_t corner = 0; corner < 3; ++corner) {
-                    item.vertices[corner] = makeVertex(points[corner], colors[corner], project);
+                    item.vertices[corner] = makeVertex(points[corner], item.color, project);
                     item.depths[corner] = points[corner].z;
                 }
                 triangles.push_back(item);
@@ -459,8 +497,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     projected[corner] = triangle.vertices[corner].position;
                     depths[corner] = triangle.depths[corner];
                 }
-                const SDL_Color meshColor{72, 190, 238, 255};
-                rasterizeTriangle(width, height, projected, depths, meshColor,
+                rasterizeTriangle(width, height, projected, depths, triangle.color,
                                   colorBuffer_, depthBuffer_);
             }
         }
