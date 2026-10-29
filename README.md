@@ -18,6 +18,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Renders multiple visible scene objects from shared OBJ mesh data, applying each object's position, rotation, scale, and visibility flag
 - Press 1 or 2 to toggle the visibility of each demo pyramid at runtime
 - Press F3 to toggle wireframe rendering for the cube and loaded OBJ meshes
+- Filled triangles use a CPU-side Z-buffer for per-pixel visibility
 - World-space perspective floor grid that responds to camera movement
 - GitHub Actions builds the Windows executable, runs camera, collision, scene-management, and OBJ-loader unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
@@ -31,11 +32,12 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **Left or right Shift:** move faster
 - **1:** show or hide the right demo pyramid; **2:** show or hide the left demo pyramid
 - **F3:** toggle wireframe mode for the cube and OBJ meshes
+- Filled 3D geometry uses a CPU-side Z-buffer for depth testing
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
 
-The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), and a reminder of the main controls. F3 switches the cube and loaded OBJ meshes between filled polygons and wireframe outlines. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
+The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), and a reminder of the main controls. F3 switches the cube and loaded OBJ meshes between filled polygons and wireframe outlines. Filled 3D triangles use a CPU-side Z-buffer, so nearer surfaces win per pixel instead of relying only on polygon draw order. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
 
 ## OBJ mesh loader prototype
 
