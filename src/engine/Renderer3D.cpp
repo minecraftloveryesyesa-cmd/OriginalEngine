@@ -439,6 +439,9 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             if (!valid) {
                 continue;
             }
+            const bool triangleFullyInFront = std::all_of(
+                polygon.begin(), polygon.end(),
+                [nearPlane](const Vec3& point) { return point.z > nearPlane; });
             polygon = clipAgainstNearPlane(polygon, nearPlane);
             if (polygon.size() < 3) {
                 continue;
@@ -492,6 +495,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 // is fully in front of the near plane. Clipped triangles retain the
                 // robust flat-shading path because clipping also creates new vertices.
                 const bool hasVertexNormals =
+                    triangleFullyInFront &&
                     polygon.size() == 3 &&
                     sourceVertices[0] != nullptr && sourceVertices[0]->hasNormal &&
                     sourceVertices[1] != nullptr && sourceVertices[1]->hasNormal &&
