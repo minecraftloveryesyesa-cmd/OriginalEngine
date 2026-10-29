@@ -433,7 +433,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     const float centerX = static_cast<float>(width) * 0.5F;
     const float centerY = static_cast<float>(height) * 0.5F;
     constexpr float focalLength = 2.4F;
-    constexpr float nearPlane = 0.08F;
+    constexpr float nearPlane = 0.20F;
 
     auto project = [&](Vec3 p) -> SDL_FPoint {
         const float perspective = focalLength / p.z;
