@@ -18,11 +18,11 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Renders multiple visible scene objects from shared OBJ mesh data, applying each object's position, rotation, scale, and visibility flag
 - Press 1 or 2 to toggle the visibility of each demo pyramid at runtime
 - Press F3 to toggle wireframe rendering for the cube and loaded OBJ meshes
-- Filled triangles use a CPU-side Z-buffer for per-pixel visibility
-- World-space perspective floor grid that responds to camera movement
+- Filled triangles and floor-grid lines use a CPU-side Z-buffer for per-pixel visibility
+- World-space perspective floor grid that responds to camera movement and is occluded by nearer geometry
 - GitHub Actions builds the Windows executable, runs camera, collision, scene-management, and OBJ-loader unit tests plus a rendering smoke test, and uploads the executable as an artifact
 
-> The current renderer is an initial CPU-side projection and SDL triangle-rasterization prototype, not yet a modern GPU 3D pipeline. Depth sorting still uses a painter's algorithm; intersecting geometry and complex scenes will need a depth-buffer renderer later. Geometry crossing the near plane is clipped instead of being discarded wholesale.
+> The current renderer is an initial CPU-side projection and SDL rasterization prototype, not yet a modern GPU 3D pipeline. Filled triangles and floor-grid lines use a CPU-side depth buffer; wireframe mode is still drawn as SDL lines without depth testing. Geometry crossing the near plane is clipped instead of being discarded wholesale.
 
 ## Camera controls
 
@@ -32,12 +32,12 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **Left or right Shift:** move faster
 - **1:** show or hide the right demo pyramid; **2:** show or hide the left demo pyramid
 - **F3:** toggle wireframe mode for the cube and OBJ meshes
-- Filled 3D geometry uses a CPU-side Z-buffer for depth testing
+- Filled 3D geometry and floor-grid lines use a CPU-side Z-buffer for depth testing
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
 
-The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), and a reminder of the main controls. F3 switches the cube and loaded OBJ meshes between filled polygons and wireframe outlines. Filled 3D triangles use a CPU-side Z-buffer, so nearer surfaces win per pixel instead of relying only on polygon draw order. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
+The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), and a reminder of the main controls. F3 switches the cube and loaded OBJ meshes between filled polygons and wireframe outlines. Filled 3D triangles and floor-grid lines use a CPU-side Z-buffer, so nearer surfaces win per pixel instead of relying only on polygon draw order. Wireframe lines are not depth-tested yet. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
 
 ## OBJ mesh loader prototype
 
@@ -115,7 +115,8 @@ OriginalEngine は、C++20 を基盤として開発しているクロスプラ�
 - 3 軸で回転する、6 色の面を持つ透視投影 3D キューブ
 - 同じ OBJ メッシュデータを複数のシーンオブジェクトで共有し、それぞれの位置・回転・拡大縮小・表示状態を反映して描画
 - 1 キーと 2 キーでデモ用ピラミッドの表示・非表示を切り替え
-- カメラの移動に応じて見え方が変わる、ワールド座標系の透視投影フロアグリッド
+- カメラの移動に応じて見え方が変わり、近いメッシュに隠れる、ワールド座標系の透視投影フロアグリッド
+- 塗りつぶしポリゴンとフロアグリッド線に対応した CPU 側 Z バッファによるピクセル単位の奥行き判定
 - GitHub Actions による Windows 実行ファイルのビルド、カメラ・衝突判定・シーン管理・OBJ ローダーのユニットテスト、描画スモークテスト、および成果物のアップロード
 
 > 現在の描画機能は、CPU 側で透視投影を行い、SDL で三角形をラスタライズする初期段階の試作です。まだ最新の GPU 3D パイプラインではありません。奥行きの判定にはペインターアルゴリズムを使用しているため、交差するポリゴンや複雑なシーンでは制限があります。将来的には Z バッファによる奥行き判定が必要です。近接平面を横切るポリゴンは、全体を破棄せずにクリッピングしてから描画します。
@@ -132,7 +133,7 @@ OriginalEngine は、C++20 を基盤として開発しているクロスプラ�
 - **マウス移動：** マウス捕捉中に視点を操作
 - **Esc：** マウス捕捉を解除。もう一度押すと終了
 
-画面左上のデバッグ HUD には、平滑化した FPS の推定値、カメラ座標（X/Y/Z）、主な操作方法が表示されます。SDL3 標準のデバッグ文字描画機能を使うため、フォントファイルや SDL_ttf は必要ありません。
+画面左上のデバッグ HUD には、平滑化した FPS の推定値、カメラ座標（X/Y/Z）、主な操作方法が表示されます。塗りつぶしポリゴンとフロアグリッド線は CPU 側の Z バッファで奥行き判定され、手前のジオメトリが奥のグリッド線を隠します。ワイヤーフレーム線はまだ深度判定されません。SDL3 標準のデバッグ文字描画機能を使うため、フォントファイルや SDL_ttf は必要ありません。
 
 ## OBJ メッシュローダー（試作）
 
