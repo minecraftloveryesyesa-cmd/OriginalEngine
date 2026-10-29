@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <filesystem>
 #include <string>
 #include <cctype>
 #include <limits>
@@ -196,10 +197,24 @@ void rasterizeTriangle(
     const float maxX = std::max({points[0].x, points[1].x, points[2].x});
     const float minY = std::min({points[0].y, points[1].y, points[2].y});
     const float maxY = std::max({points[0].y, points[1].y, points[2].y});
-    const int left = std::max(0, static_cast<int>(std::floor(minX)));
-    const int right = std::min(width - 1, static_cast<int>(std::ceil(maxX)));
-    const int top = std::max(0, static_cast<int>(std::floor(minY)));
-    const int bottom = std::min(height - 1, static_cast<int>(std::ceil(maxY)));
+
+    // Reject off-screen or non-finite bounds before float-to-int conversion.
+    // Near-plane clipping can still create extremely large projected coordinates.
+    if (!std::isfinite(minX) || !std::isfinite(maxX) ||
+        !std::isfinite(minY) || !std::isfinite(maxY) ||
+        maxX < 0.0F || maxY < 0.0F ||
+        minX >= static_cast<float>(width) ||
+        minY >= static_cast<float>(height)) {
+        return;
+    }
+    const int left = static_cast<int>(std::floor(std::clamp(minX, 0.0F,
+                                                            static_cast<float>(width - 1))));
+    const int right = static_cast<int>(std::ceil(std::clamp(maxX, 0.0F,
+                                                            static_cast<float>(width - 1))));
+    const int top = static_cast<int>(std::floor(std::clamp(minY, 0.0F,
+                                                           static_cast<float>(height - 1))));
+    const int bottom = static_cast<int>(std::ceil(std::clamp(maxY, 0.0F,
+                                                             static_cast<float>(height - 1))));
     if (left > right || top > bottom) {
         return;
     }
@@ -564,8 +579,9 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 if (loadPpmTexture(instance.texturePath, loaded)) {
                     cached = textureCache_.emplace(instance.texturePath, std::move(loaded)).first;
                 } else {
-                    SDL_Log("Could not load P3 PPM texture '%s'; rendering without texture.",
-                            instance.texturePath.c_str());
+                    SDL_Log("Could not load P3 PPM texture '%s' (working directory: '%s'); "
+                            "expected an ASCII PPM file beginning with P3. Rendering without texture.",
+                            instance.texturePath.c_str(), std::filesystem::current_path().string().c_str());
                     cached = textureCache_.emplace(instance.texturePath, TextureImage{}).first;
                 }
             }
