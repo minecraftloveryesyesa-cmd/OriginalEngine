@@ -95,8 +95,8 @@ int main(int argc, char* argv[]) {
             exitCode = 1;
         }
         const std::vector<originalengine::MeshInstance> meshInstances{
-            {&demoMesh, demoObject},
-            {&demoMesh, leftObject}
+            {&demoMesh, demoObject, "assets/demo_texture.ppm"},
+            {&demoMesh, leftObject, "assets/demo_texture.ppm"}
         };
         // Conservative static bounds around the demo cube.
         collisionWorld.addObstacle({-1.4F, -1.4F, 2.8F, 1.4F, 1.4F, 5.6F});
