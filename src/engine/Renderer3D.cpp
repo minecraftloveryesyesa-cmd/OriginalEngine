@@ -95,7 +95,7 @@ void rasterizeTriangle(
     int width, int height,
     const std::array<SDL_FPoint, 3>& points,
     const std::array<float, 3>& depths,
-    SDL_Color color,
+    const std::array<SDL_Color, 3>& colors,
     std::vector<Uint8>& colorBuffer,
     std::vector<float>& depthBuffer) {
     const float area =
@@ -146,10 +146,20 @@ void rasterizeTriangle(
             }
             depthBuffer[pixel] = depth;
             const std::size_t offset = pixel * 4U;
-            colorBuffer[offset] = color.r;
-            colorBuffer[offset + 1U] = color.g;
-            colorBuffer[offset + 2U] = color.b;
-            colorBuffer[offset + 3U] = color.a;
+            const float colorWeight0 = w0 * invZ0 / reciprocalDepth;
+            const float colorWeight1 = w1 * invZ1 / reciprocalDepth;
+            const float colorWeight2 = w2 * invZ2 / reciprocalDepth;
+            const auto interpolateChannel = [&](Uint8 SDL_Color::*channel) {
+                const float value =
+                    static_cast<float>(colors[0].*channel) * colorWeight0 +
+                    static_cast<float>(colors[1].*channel) * colorWeight1 +
+                    static_cast<float>(colors[2].*channel) * colorWeight2;
+                return static_cast<Uint8>(std::clamp(value, 0.0F, 255.0F));
+            };
+            colorBuffer[offset] = interpolateChannel(&SDL_Color::r);
+            colorBuffer[offset + 1U] = interpolateChannel(&SDL_Color::g);
+            colorBuffer[offset + 2U] = interpolateChannel(&SDL_Color::b);
+            colorBuffer[offset + 3U] = interpolateChannel(&SDL_Color::a);
         }
     }
 }
@@ -374,7 +384,10 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     projected[corner] = project(points[corner]);
                     depths[corner] = points[corner].z;
                 }
-                rasterizeTriangle(width, height, projected, depths, face.color,
+                const std::array<SDL_Color, 3> faceColors{
+                    face.color, face.color, face.color
+                };
+                rasterizeTriangle(width, height, projected, depths, faceColors,
                                   colorBuffer_, depthBuffer_);
             }
         }
@@ -391,7 +404,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         struct TriangleToDraw {
             std::array<SDL_Vertex, 3> vertices;
             std::array<float, 3> depths;
-            SDL_Color color{};
+            std::array<SDL_Color, 3> colors{};
         };
         std::vector<TriangleToDraw> triangles;
         triangles.reserve(mesh.triangles.size());
@@ -400,12 +413,15 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             std::vector<Vec3> polygon;
             polygon.reserve(3);
             bool valid = true;
+            std::array<const MeshVertex*, 3> sourceVertices{};
+            std::size_t sourceCorner = 0;
             for (const std::size_t index : triangle.indices) {
                 if (index >= mesh.vertices.size()) {
                     valid = false;
                     break;
                 }
                 const MeshVertex& vertex = mesh.vertices[index];
+                sourceVertices[sourceCorner++] = &vertex;
                 Vec3 point{
                     vertex.x * meshTransform.scale.x,
                     vertex.y * meshTransform.scale.y,
@@ -465,14 +481,62 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
 
                 TriangleToDraw item{};
                 constexpr SDL_Color baseColor{72, 190, 238, 255};
-                item.color = {
+                const SDL_Color flatColor{
                     static_cast<Uint8>(static_cast<float>(baseColor.r) * intensity),
                     static_cast<Uint8>(static_cast<float>(baseColor.g) * intensity),
                     static_cast<Uint8>(static_cast<float>(baseColor.b) * intensity),
                     baseColor.a
                 };
+
+                // Use OBJ vn normals for Gouraud shading when the original triangle
+                // is fully in front of the near plane. Clipped triangles retain the
+                // robust flat-shading path because clipping also creates new vertices.
+                const bool hasVertexNormals =
+                    polygon.size() == 3 &&
+                    sourceVertices[0] != nullptr && sourceVertices[0]->hasNormal &&
+                    sourceVertices[1] != nullptr && sourceVertices[1]->hasNormal &&
+                    sourceVertices[2] != nullptr && sourceVertices[2]->hasNormal;
                 for (std::size_t corner = 0; corner < 3; ++corner) {
-                    item.vertices[corner] = makeVertex(points[corner], item.color, project);
+                    SDL_Color vertexColor = flatColor;
+                    if (hasVertexNormals) {
+                        const MeshVertex& source = *sourceVertices[corner];
+                        Vec3 normal{
+                            std::abs(meshTransform.scale.x) > 1.0e-6F
+                                ? source.nx / meshTransform.scale.x : 0.0F,
+                            std::abs(meshTransform.scale.y) > 1.0e-6F
+                                ? source.ny / meshTransform.scale.y : 0.0F,
+                            std::abs(meshTransform.scale.z) > 1.0e-6F
+                                ? source.nz / meshTransform.scale.z : 0.0F
+                        };
+                        normal = rotateX(normal, meshTransform.rotation.x);
+                        normal = rotateY(normal, meshTransform.rotation.y);
+                        normal = rotateZ(normal, meshTransform.rotation.z);
+                        normal = rotateY(normal, -camera.yaw());
+                        normal = rotateX(normal, camera.pitch());
+                        const float length = std::sqrt(
+                            normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+                        if (length > 1.0e-6F) {
+                            normal.x /= length;
+                            normal.y /= length;
+                            normal.z /= length;
+                            constexpr Vec3 lightDirection{0.35F, 0.75F, -0.55F};
+                            constexpr float lightLength = 0.99624294F;
+                            const float vertexDiffuse = std::abs(
+                                normal.x * lightDirection.x +
+                                normal.y * lightDirection.y +
+                                normal.z * lightDirection.z) / lightLength;
+                            const float vertexIntensity =
+                                0.24F + 0.76F * std::clamp(vertexDiffuse, 0.0F, 1.0F);
+                            vertexColor = {
+                                static_cast<Uint8>(static_cast<float>(baseColor.r) * vertexIntensity),
+                                static_cast<Uint8>(static_cast<float>(baseColor.g) * vertexIntensity),
+                                static_cast<Uint8>(static_cast<float>(baseColor.b) * vertexIntensity),
+                                baseColor.a
+                            };
+                        }
+                    }
+                    item.colors[corner] = vertexColor;
+                    item.vertices[corner] = makeVertex(points[corner], vertexColor, project);
                     item.depths[corner] = points[corner].z;
                 }
                 triangles.push_back(item);
@@ -497,7 +561,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     projected[corner] = triangle.vertices[corner].position;
                     depths[corner] = triangle.depths[corner];
                 }
-                rasterizeTriangle(width, height, projected, depths, triangle.color,
+                rasterizeTriangle(width, height, projected, depths, triangle.colors,
                                   colorBuffer_, depthBuffer_);
             }
         }
