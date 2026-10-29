@@ -243,12 +243,12 @@ void rasterizeTriangle(
             };
             SDL_Color texel{255, 255, 255, 255};
             if (texture != nullptr && texCoords != nullptr) {
-                const float u = (texCoords[0].x * w0 * invZ0 +
-                                 texCoords[1].x * w1 * invZ1 +
-                                 texCoords[2].x * w2 * invZ2) / reciprocalDepth;
-                const float v = (texCoords[0].y * w0 * invZ0 +
-                                 texCoords[1].y * w1 * invZ1 +
-                                 texCoords[2].y * w2 * invZ2) / reciprocalDepth;
+                const float u = ((*texCoords)[0].x * w0 * invZ0 +
+                                 (*texCoords)[1].x * w1 * invZ1 +
+                                 (*texCoords)[2].x * w2 * invZ2) / reciprocalDepth;
+                const float v = ((*texCoords)[0].y * w0 * invZ0 +
+                                 (*texCoords)[1].y * w1 * invZ1 +
+                                 (*texCoords)[2].y * w2 * invZ2) / reciprocalDepth;
                 texel = sampleTexture(*texture, u, v);
             }
             colorBuffer[offset] = static_cast<Uint8>(
