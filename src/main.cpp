@@ -22,10 +22,9 @@ void logSdlError(const char* operation) {
 
 std::filesystem::path resolveAssetPath(const char* relativePath) {
     const std::filesystem::path relative(relativePath);
-    char* basePath = SDL_GetBasePath();
+    const char* basePath = SDL_GetBasePath();
     if (basePath != nullptr) {
         const std::filesystem::path executablePath(basePath);
-        SDL_free(basePath);
         const std::filesystem::path besideExecutable = executablePath / relative;
         std::error_code error;
         if (std::filesystem::is_regular_file(besideExecutable, error)) {
@@ -37,11 +36,9 @@ std::filesystem::path resolveAssetPath(const char* relativePath) {
     if (std::filesystem::is_regular_file(relative, error)) {
         return std::filesystem::absolute(relative, error);
     }
-    char* fallbackBase = SDL_GetBasePath();
     std::filesystem::path fallback = relative;
-    if (fallbackBase != nullptr) {
-        fallback = std::filesystem::path(fallbackBase) / relative;
-        SDL_free(fallbackBase);
+    if (basePath != nullptr) {
+        fallback = std::filesystem::path(basePath) / relative;
     }
     return fallback;
 }
