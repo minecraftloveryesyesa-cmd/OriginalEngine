@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -90,12 +91,82 @@ SDL_Vertex makeVertex(Vec3 point, SDL_Color color,
     return vertex;
 }
 
+
+void rasterizeTriangle(
+    int width, int height,
+    const std::array<SDL_FPoint, 3>& points,
+    const std::array<float, 3>& depths,
+    SDL_Color color,
+    std::vector<Uint8>& colorBuffer,
+    std::vector<float>& depthBuffer) {
+    const float area =
+        (points[1].x - points[0].x) * (points[2].y - points[0].y) -
+        (points[1].y - points[0].y) * (points[2].x - points[0].x);
+    if (std::abs(area) < 1.0e-6F) {
+        return;
+    }
+
+    const float minX = std::min({points[0].x, points[1].x, points[2].x});
+    const float maxX = std::max({points[0].x, points[1].x, points[2].x});
+    const float minY = std::min({points[0].y, points[1].y, points[2].y});
+    const float maxY = std::max({points[0].y, points[1].y, points[2].y});
+    const int left = std::max(0, static_cast<int>(std::floor(minX)));
+    const int right = std::min(width - 1, static_cast<int>(std::ceil(maxX)));
+    const int top = std::max(0, static_cast<int>(std::floor(minY)));
+    const int bottom = std::min(height - 1, static_cast<int>(std::ceil(maxY)));
+    if (left > right || top > bottom) {
+        return;
+    }
+
+    const float invZ0 = 1.0F / depths[0];
+    const float invZ1 = 1.0F / depths[1];
+    const float invZ2 = 1.0F / depths[2];
+    for (int y = top; y <= bottom; ++y) {
+        for (int x = left; x <= right; ++x) {
+            const float px = static_cast<float>(x) + 0.5F;
+            const float py = static_cast<float>(y) + 0.5F;
+            const float w0 = ((points[1].x - px) * (points[2].y - py) -
+                              (points[1].y - py) * (points[2].x - px)) / area;
+            const float w1 = ((points[2].x - px) * (points[0].y - py) -
+                              (points[2].y - py) * (points[0].x - px)) / area;
+            const float w2 = 1.0F - w0 - w1;
+            if (w0 < -1.0e-5F || w1 < -1.0e-5F || w2 < -1.0e-5F) {
+                continue;
+            }
+
+            const float reciprocalDepth = w0 * invZ0 + w1 * invZ1 + w2 * invZ2;
+            if (reciprocalDepth <= 0.0F) {
+                continue;
+            }
+            const float depth = 1.0F / reciprocalDepth;
+            const std::size_t pixel = static_cast<std::size_t>(y) *
+                                      static_cast<std::size_t>(width) +
+                                      static_cast<std::size_t>(x);
+            if (depth >= depthBuffer[pixel]) {
+                continue;
+            }
+            depthBuffer[pixel] = depth;
+            const std::size_t offset = pixel * 4U;
+            colorBuffer[offset] = color.r;
+            colorBuffer[offset + 1U] = color.g;
+            colorBuffer[offset + 2U] = color.b;
+            colorBuffer[offset + 3U] = color.a;
+        }
+    }
+}
+
 } // namespace
 
 Renderer3D::Renderer3D(SDL_Renderer* renderer)
     : renderer_(renderer) {
     if (renderer_ == nullptr) {
         throw std::invalid_argument("Renderer3D requires a valid SDL_Renderer.");
+    }
+}
+
+Renderer3D::~Renderer3D() {
+    if (depthTexture_ != nullptr) {
+        SDL_DestroyTexture(depthTexture_);
     }
 }
 
@@ -119,6 +190,35 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
 
     SDL_SetRenderDrawColor(renderer_, 12, 18, 31, 255);
     SDL_RenderClear(renderer_);
+
+    if (!wireframe && (depthTexture_ == nullptr ||
+                       textureWidth_ != width || textureHeight_ != height)) {
+        if (depthTexture_ != nullptr) {
+            SDL_DestroyTexture(depthTexture_);
+            depthTexture_ = nullptr;
+        }
+        depthTexture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
+                                          SDL_TEXTUREACCESS_STREAMING, width, height);
+        if (depthTexture_ == nullptr) {
+            SDL_Log("Could not create depth-buffer texture: %s", SDL_GetError());
+            return false;
+        }
+        if (!SDL_SetTextureBlendMode(depthTexture_, SDL_BLENDMODE_BLEND)) {
+            SDL_Log("Could not set depth-buffer texture blend mode: %s", SDL_GetError());
+            return false;
+        }
+        textureWidth_ = width;
+        textureHeight_ = height;
+        colorBuffer_.resize(static_cast<std::size_t>(width) *
+                            static_cast<std::size_t>(height) * 4U);
+        depthBuffer_.resize(static_cast<std::size_t>(width) *
+                            static_cast<std::size_t>(height));
+    }
+    if (!wireframe) {
+        std::fill(colorBuffer_.begin(), colorBuffer_.end(), Uint8{0});
+        std::fill(depthBuffer_.begin(), depthBuffer_.end(),
+                  std::numeric_limits<float>::infinity());
+    }
 
     const float scale = static_cast<float>(std::min(width, height)) * 0.42F;
     const float centerX = static_cast<float>(width) * 0.5F;
@@ -194,10 +294,6 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         }
     }
 
-    // Painter's algorithm: draw distant faces before nearer faces.
-    std::sort(faces.begin(), faces.end(),
-              [](const Face& a, const Face& b) { return a.depth > b.depth; });
-
     for (const Face& face : faces) {
         std::vector<Vec3> polygon;
         polygon.reserve(face.indices.size());
@@ -220,18 +316,16 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 }
             }
         } else {
-            // Clipping can turn a quad into a larger polygon; triangulate it as a fan.
-            std::vector<SDL_Vertex> vertices;
-            vertices.reserve((polygon.size() - 2) * 3);
             for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
-                vertices.push_back(makeVertex(polygon[0], face.color, project));
-                vertices.push_back(makeVertex(polygon[i], face.color, project));
-                vertices.push_back(makeVertex(polygon[i + 1], face.color, project));
-            }
-            if (!SDL_RenderGeometry(renderer_, nullptr, vertices.data(),
-                                    static_cast<int>(vertices.size()), nullptr, 0)) {
-                SDL_Log("SDL_RenderGeometry failed: %s", SDL_GetError());
-                return false;
+                const std::array<Vec3, 3> points{polygon[0], polygon[i], polygon[i + 1]};
+                std::array<SDL_FPoint, 3> projected{};
+                std::array<float, 3> depths{};
+                for (std::size_t corner = 0; corner < 3; ++corner) {
+                    projected[corner] = project(points[corner]);
+                    depths[corner] = points[corner].z;
+                }
+                rasterizeTriangle(width, height, projected, depths, face.color,
+                                  colorBuffer_, depthBuffer_);
             }
         }
     }
@@ -294,15 +388,12 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 const Vec3 points[3] = {polygon[0], polygon[i], polygon[i + 1]};
                 for (std::size_t corner = 0; corner < 3; ++corner) {
                     item.vertices[corner] = makeVertex(points[corner], colors[corner], project);
+                item.vertices[corner].tex_coord.x = points[corner].z;
                 }
                 triangles.push_back(item);
             }
         }
 
-        std::sort(triangles.begin(), triangles.end(),
-                  [](const TriangleToDraw& a, const TriangleToDraw& b) {
-                      return a.depth > b.depth;
-                  });
         for (const TriangleToDraw& triangle : triangles) {
             if (wireframe) {
                 SDL_SetRenderDrawColor(renderer_, 120, 220, 255, 255);
@@ -314,11 +405,28 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                         return false;
                     }
                 }
-            } else if (!SDL_RenderGeometry(renderer_, nullptr, triangle.vertices.data(), 3,
-                                           nullptr, 0)) {
-                SDL_Log("SDL_RenderGeometry for mesh failed: %s", SDL_GetError());
-                return false;
+            } else {
+                std::array<SDL_FPoint, 3> projected{};
+                std::array<float, 3> depths{};
+                for (std::size_t corner = 0; corner < 3; ++corner) {
+                    projected[corner] = triangle.vertices[corner].position;
+                    depths[corner] = triangle.vertices[corner].tex_coord.x;
+                }
+                const SDL_Color meshColor{72, 190, 238, 255};
+                rasterizeTriangle(width, height, projected, depths, meshColor,
+                                  colorBuffer_, depthBuffer_);
             }
+        }
+    }
+
+    if (!wireframe) {
+        if (!SDL_UpdateTexture(depthTexture_, nullptr, colorBuffer_.data(), width * 4)) {
+            SDL_Log("SDL_UpdateTexture for depth buffer failed: %s", SDL_GetError());
+            return false;
+        }
+        if (!SDL_RenderTexture(renderer_, depthTexture_, nullptr, nullptr)) {
+            SDL_Log("SDL_RenderTexture for depth buffer failed: %s", SDL_GetError());
+            return false;
         }
     }
 
