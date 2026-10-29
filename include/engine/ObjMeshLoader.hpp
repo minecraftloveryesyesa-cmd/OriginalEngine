@@ -8,8 +8,8 @@
 
 namespace originalengine {
 
-// Loads the geometry subset of Wavefront OBJ: v and f records.
-// Texture coordinates and normals are ignored; polygon faces are triangulated.
+// Loads Wavefront OBJ positions, optional texture coordinates/normals, and faces.
+// Polygon faces are triangulated; positive and negative indices are supported.
 class ObjMeshLoader {
 public:
     [[nodiscard]] static bool loadFromFile(
