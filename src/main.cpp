@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <string_view>
 #include <vector>
@@ -17,6 +18,32 @@ namespace {
 void logSdlError(const char* operation) {
     std::cerr << "[OriginalEngine] " << operation << " failed: "
               << SDL_GetError() << '\n';
+}
+
+std::filesystem::path resolveAssetPath(const char* relativePath) {
+    const std::filesystem::path relative(relativePath);
+    char* basePath = SDL_GetBasePath();
+    if (basePath != nullptr) {
+        const std::filesystem::path executablePath(basePath);
+        SDL_free(basePath);
+        const std::filesystem::path besideExecutable = executablePath / relative;
+        std::error_code error;
+        if (std::filesystem::is_regular_file(besideExecutable, error)) {
+            return besideExecutable;
+        }
+    }
+
+    std::error_code error;
+    if (std::filesystem::is_regular_file(relative, error)) {
+        return std::filesystem::absolute(relative, error);
+    }
+    char* fallbackBase = SDL_GetBasePath();
+    std::filesystem::path fallback = relative;
+    if (fallbackBase != nullptr) {
+        fallback = std::filesystem::path(fallbackBase) / relative;
+        SDL_free(fallbackBase);
+    }
+    return fallback;
 }
 
 } // namespace
@@ -65,8 +92,10 @@ int main(int argc, char* argv[]) {
         originalengine::CollisionWorld collisionWorld;
         originalengine::Mesh demoMesh;
         std::string meshError;
-        if (!originalengine::ObjMeshLoader::loadFromFile("assets/demo.obj", demoMesh, &meshError)) {
-            std::cerr << "[OriginalEngine] Could not load assets/demo.obj: "
+        const std::filesystem::path meshPath = resolveAssetPath("assets/demo.obj");
+        const std::filesystem::path texturePath = resolveAssetPath("assets/demo_texture.ppm");
+        if (!originalengine::ObjMeshLoader::loadFromFile(meshPath.string(), demoMesh, &meshError)) {
+            std::cerr << "[OriginalEngine] Could not load mesh '" << meshPath.string() << "': "
                       << meshError << '\n';
             exitCode = 1;
         }
@@ -95,8 +124,8 @@ int main(int argc, char* argv[]) {
             exitCode = 1;
         }
         const std::vector<originalengine::MeshInstance> meshInstances{
-            {&demoMesh, demoObject, "assets/demo_texture.ppm"},
-            {&demoMesh, leftObject, "assets/demo_texture.ppm"}
+            {&demoMesh, demoObject, texturePath.string()},
+            {&demoMesh, leftObject, texturePath.string()}
         };
         // Conservative static bounds around the demo cube.
         collisionWorld.addObstacle({-1.4F, -1.4F, 2.8F, 1.4F, 1.4F, 5.6F});
