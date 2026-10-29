@@ -19,7 +19,6 @@ namespace {
 struct Face {
     std::array<int, 4> indices;
     SDL_Color color;
-    float depth{};
 };
 
 Vec3 rotateX(Vec3 p, float angle) {
@@ -286,14 +285,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         {{{4, 5, 1, 0}}, {76, 207, 220, 255}}
     }};
 
-    std::array<Face, 6> faces = baseFaces;
-    for (Face& face : faces) {
-        face.depth = 0.0F;
-        for (const int index : face.indices) {
-            face.depth += transformed[static_cast<std::size_t>(index)].z * 0.25F;
-        }
-    }
-
+    const std::array<Face, 6>& faces = baseFaces;
     for (const Face& face : faces) {
         std::vector<Vec3> polygon;
         polygon.reserve(face.indices.size());
@@ -340,7 +332,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         const Transform& meshTransform = instance.object->transform;
         struct TriangleToDraw {
             std::array<SDL_Vertex, 3> vertices;
-            float depth;
+            std::array<float, 3> depths;
         };
         std::vector<TriangleToDraw> triangles;
         triangles.reserve(mesh.triangles.size());
@@ -349,7 +341,6 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             std::vector<Vec3> polygon;
             polygon.reserve(3);
             bool valid = true;
-            float depth = 0.0F;
             for (const std::size_t index : triangle.indices) {
                 if (index >= mesh.vertices.size()) {
                     valid = false;
@@ -369,7 +360,6 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 point.z += meshTransform.position.z;
                 point = toCameraSpace(point, camera);
                 polygon.push_back(point);
-                depth += point.z / 3.0F;
             }
             if (!valid) {
                 continue;
@@ -380,7 +370,6 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             }
 
             TriangleToDraw item{};
-            item.depth = depth;
             const SDL_Color colors[3] = {
                 {64, 184, 240, 255}, {82, 184, 240, 255}, {64, 184, 220, 255}
             };
@@ -388,7 +377,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 const Vec3 points[3] = {polygon[0], polygon[i], polygon[i + 1]};
                 for (std::size_t corner = 0; corner < 3; ++corner) {
                     item.vertices[corner] = makeVertex(points[corner], colors[corner], project);
-                item.vertices[corner].tex_coord.x = points[corner].z;
+                    item.depths[corner] = points[corner].z;
                 }
                 triangles.push_back(item);
             }
@@ -410,7 +399,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 std::array<float, 3> depths{};
                 for (std::size_t corner = 0; corner < 3; ++corner) {
                     projected[corner] = triangle.vertices[corner].position;
-                    depths[corner] = triangle.vertices[corner].tex_coord.x;
+                    depths[corner] = triangle.depths[corner];
                 }
                 const SDL_Color meshColor{72, 190, 238, 255};
                 rasterizeTriangle(width, height, projected, depths, meshColor,
