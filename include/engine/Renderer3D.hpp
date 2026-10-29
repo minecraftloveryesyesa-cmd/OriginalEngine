@@ -20,6 +20,10 @@ struct MeshInstance {
 class Renderer3D {
 public:
     explicit Renderer3D(SDL_Renderer* renderer);
+    ~Renderer3D();
+
+    Renderer3D(const Renderer3D&) = delete;
+    Renderer3D& operator=(const Renderer3D&) = delete;
 
     [[nodiscard]] bool render(int width, int height, double elapsedSeconds,
                               const Camera& camera,
@@ -28,6 +32,11 @@ public:
 
 private:
     SDL_Renderer* renderer_;
+    SDL_Texture* depthTexture_{nullptr};
+    int textureWidth_{0};
+    int textureHeight_{0};
+    std::vector<Uint8> colorBuffer_;
+    std::vector<float> depthBuffer_;
     double previousElapsedSeconds_{0.0};
     float smoothedFramesPerSecond_{0.0F};
 };
