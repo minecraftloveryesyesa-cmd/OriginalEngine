@@ -29,7 +29,7 @@ bool readPpmToken(std::istream& input, std::string& token) {
     char ch = 0;
     while (input.get(ch)) {
         if (ch == '#') {
-            input.ignore(std::numeric_limits<std::streamsize>::max(), '\\n');
+            input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             continue;
         }
         if (!std::isspace(static_cast<unsigned char>(ch))) {
