@@ -154,6 +154,51 @@ void rasterizeTriangle(
     }
 }
 
+
+void rasterizeDepthLine(
+    int width, int height,
+    const SDL_FPoint& a, float depthA,
+    const SDL_FPoint& b, float depthB,
+    SDL_Color color,
+    std::vector<Uint8>& colorBuffer,
+    std::vector<float>& depthBuffer) {
+    const float dx = b.x - a.x;
+    const float dy = b.y - a.y;
+    const int steps = static_cast<int>(std::ceil(std::max(std::abs(dx), std::abs(dy))));
+    if (steps <= 0) {
+        return;
+    }
+
+    const float invDepthA = 1.0F / depthA;
+    const float invDepthB = 1.0F / depthB;
+    for (int step = 0; step <= steps; ++step) {
+        const float t = static_cast<float>(step) / static_cast<float>(steps);
+        const int x = static_cast<int>(std::floor(a.x + dx * t));
+        const int y = static_cast<int>(std::floor(a.y + dy * t));
+        if (x < 0 || x >= width || y < 0 || y >= height) {
+            continue;
+        }
+
+        const float reciprocalDepth = invDepthA + (invDepthB - invDepthA) * t;
+        if (reciprocalDepth <= 0.0F) {
+            continue;
+        }
+        const float depth = 1.0F / reciprocalDepth;
+        const std::size_t pixel = static_cast<std::size_t>(y) *
+                                  static_cast<std::size_t>(width) +
+                                  static_cast<std::size_t>(x);
+        if (depth >= depthBuffer[pixel]) {
+            continue;
+        }
+        depthBuffer[pixel] = depth;
+        const std::size_t offset = pixel * 4U;
+        colorBuffer[offset] = color.r;
+        colorBuffer[offset + 1U] = color.g;
+        colorBuffer[offset + 2U] = color.b;
+        colorBuffer[offset + 3U] = color.a;
+    }
+}
+
 } // namespace
 
 Renderer3D::Renderer3D(SDL_Renderer* renderer)
@@ -231,28 +276,41 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 centerY - p.y * scale * perspective};
     };
 
-    // Render a world-space floor grid, so it responds naturally to camera movement.
-    SDL_SetRenderDrawColor(renderer_, 31, 43, 61, 255);
-    auto drawGridLine = [&](Vec3 a, Vec3 b) {
-        const Vec3 cameraA = toCameraSpace(a, camera);
-        const Vec3 cameraB = toCameraSpace(b, camera);
-        if (cameraA.z <= nearPlane || cameraB.z <= nearPlane) {
+    // Collect world-space floor-grid lines; filled mode depth-tests them with meshes.
+    struct GridLine {
+        SDL_FPoint a;
+        SDL_FPoint b;
+        float depthA;
+        float depthB;
+    };
+    std::vector<GridLine> gridLines;
+    auto addGridLine = [&](Vec3 a, Vec3 b) {
+        Vec3 cameraA = toCameraSpace(a, camera);
+        Vec3 cameraB = toCameraSpace(b, camera);
+        if (cameraA.z <= nearPlane && cameraB.z <= nearPlane) {
             return;
         }
-        const SDL_FPoint pa = project(cameraA);
-        const SDL_FPoint pb = project(cameraB);
-        SDL_RenderLine(renderer_, pa.x, pa.y, pb.x, pb.y);
+        if (cameraA.z <= nearPlane || cameraB.z <= nearPlane) {
+            Vec3& outside = cameraA.z <= nearPlane ? cameraA : cameraB;
+            const Vec3& inside = cameraA.z <= nearPlane ? cameraB : cameraA;
+            const float t = (nearPlane - outside.z) / (inside.z - outside.z);
+            outside = {
+                outside.x + (inside.x - outside.x) * t,
+                outside.y + (inside.y - outside.y) * t,
+                nearPlane
+            };
+        }
+        gridLines.push_back({project(cameraA), project(cameraB), cameraA.z, cameraB.z});
     };
 
     constexpr float floorY = -1.5F;
     for (int i = -20; i <= 20; ++i) {
-        const float coordinate = static_cast<float>(i) * 1.0F;
-        drawGridLine({coordinate, floorY, -20.0F},
-                     {coordinate, floorY, 40.0F});
+        const float coordinate = static_cast<float>(i);
+        addGridLine({coordinate, floorY, -20.0F}, {coordinate, floorY, 40.0F});
     }
     for (int i = -2; i <= 40; ++i) {
         const float z = static_cast<float>(i);
-        drawGridLine({-20.0F, floorY, z}, {20.0F, floorY, z});
+        addGridLine({-20.0F, floorY, z}, {20.0F, floorY, z});
     }
 
     const std::array<Vec3, 8> cube{{
@@ -409,6 +467,12 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     }
 
     if (!wireframe) {
+        const SDL_Color gridColor{31, 43, 61, 255};
+        for (const GridLine& line : gridLines) {
+            rasterizeDepthLine(width, height, line.a, line.depthA,
+                               line.b, line.depthB, gridColor,
+                               colorBuffer_, depthBuffer_);
+        }
         if (!SDL_UpdateTexture(depthTexture_, nullptr, colorBuffer_.data(), width * 4)) {
             SDL_Log("SDL_UpdateTexture for depth buffer failed: %s", SDL_GetError());
             return false;
