@@ -902,7 +902,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         (void)SDL_RenderDebugText(renderer_, 12.0F, 108.0F, "Wireframe: ON");
     }
 
-    SDL_RenderPresent(renderer_);
+    // The application owns frame presentation so 2D overlays can be drawn first.
     return true;
 }
 

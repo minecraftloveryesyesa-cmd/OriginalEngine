@@ -349,8 +349,10 @@ int main(int argc, char* argv[]) {
                 SDL_SetRenderDrawColor(renderer, 210, 225, 245, 90);
                 drawTouchCircle(renderer, static_cast<float>(width) * 0.82F,
                                 static_cast<float>(height) * 0.78F, minDimension * 0.12F);
-                (void)SDL_RenderPresent(renderer);
             }
+
+            // Present exactly once per frame, after the 2D touch controls.
+            (void)SDL_RenderPresent(renderer);
 
             if (smokeTest) {
                 writeDiagnostic("Smoke test passed: one frame rendered");
