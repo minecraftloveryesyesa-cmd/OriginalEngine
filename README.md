@@ -61,6 +61,12 @@ The collision module supports static axis-aligned bounding boxes (AABBs). Camera
 - A C++20 compiler
 - Git and internet access during the first configure (SDL3 is downloaded by CMake)
 
+## iOS support (in progress)
+
+An iOS Simulator build is being added alongside the Windows build. The iOS target is packaged as an unsigned Xcode app bundle and includes the demo OBJ and PPM assets in the app's Resources directory. GitHub Actions builds an arm64 iOS Simulator artifact without requiring an Apple signing certificate.
+
+This is a build-foundation milestone only: touch controls, on-device performance tuning, device testing, and App Store signing/distribution are not complete yet. The simulator artifact is not installable on a physical iPhone.
+
 ## Build on Windows
 
 Run in a terminal with CMake and MSVC available:

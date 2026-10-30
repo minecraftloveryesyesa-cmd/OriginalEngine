@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'ios/**']
   pull_request:
   workflow_dispatch:
 
@@ -38,5 +38,36 @@ jobs:
             build/Release/SDL3.dll
             build/Release/assets/demo.obj
             build/Release/assets/demo_texture.ppm
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    name: iOS Simulator / Xcode
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure iOS Simulator
+        run: >-
+          cmake -S . -B build-ios -G Xcode
+          -DCMAKE_SYSTEM_NAME=iOS
+          -DCMAKE_OSX_SYSROOT=iphonesimulator
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+          -DORIGINALENGINE_BUILD_APP=ON
+          -DBUILD_TESTING=OFF
+
+      - name: Build iOS Simulator app
+        run: cmake --build build-ios --config Release --parallel
+
+      - name: Upload iOS Simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: GasolineEngine-iOS-Simulator
+          path: build-ios/Release-iphonesimulator/originalengine_app.app
           if-no-files-found: error
           retention-days: 14

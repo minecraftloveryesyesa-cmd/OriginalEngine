@@ -53,11 +53,29 @@ if(ORIGINALENGINE_BUILD_APP)
         target_link_libraries(originalengine_app PRIVATE originalengine)
         target_compile_definitions(originalengine_app PRIVATE ORIGINALENGINE_USE_SDL3=1)
 
-        add_custom_command(TARGET originalengine_app POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_CURRENT_SOURCE_DIR}/assets
-                $<TARGET_FILE_DIR:originalengine_app>/assets
-        )
+        if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+            set_target_properties(originalengine_app PROPERTIES
+                MACOSX_BUNDLE TRUE
+                MACOSX_BUNDLE_GUI_IDENTIFIER "com.gasolineengine.demo"
+                MACOSX_BUNDLE_BUNDLE_NAME "Gasoline Engine"
+                XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+            )
+            set_source_files_properties(
+                assets/demo.obj
+                assets/demo_texture.ppm
+                PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets"
+            )
+            target_sources(originalengine_app PRIVATE
+                assets/demo.obj
+                assets/demo_texture.ppm
+            )
+        else()
+            add_custom_command(TARGET originalengine_app POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_CURRENT_SOURCE_DIR}/assets
+                    $<TARGET_FILE_DIR:originalengine_app>/assets
+            )
+        endif()
 
         if(WIN32)
             add_custom_command(TARGET originalengine_app POST_BUILD
