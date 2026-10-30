@@ -246,10 +246,11 @@ int main(int argc, char* argv[]) {
     }
 
     int exitCode = 0;
+    std::unique_ptr<originalengine::Renderer3D> renderer3D;
+    SDL_GPUDevice* gpuDevice = nullptr;
     try {
         writeDiagnostic("Stage: creating Renderer3D");
-        auto renderer3D = std::make_unique<originalengine::Renderer3D>(renderer);
-        SDL_GPUDevice* gpuDevice = nullptr;
+        renderer3D = std::make_unique<originalengine::Renderer3D>(renderer);
         bool gpuMode = false;
         bool backendToggleRequested = false;
         writeDiagnostic("Stage: Renderer3D created");
