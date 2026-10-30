@@ -12,6 +12,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Wavefront OBJ loader for positions, optional UV coordinates and normals, polygon triangulation, negative indices, and per-corner attribute indexing
 - Q/E vertical movement; Shift for faster movement
 - Right-click toggles mouse capture; Esc releases the mouse or exits
+- iOS touch: left half moves with a virtual joystick; right half drag controls camera look
 - On-screen debug overlay showing smoothed FPS, camera coordinates, and control hints
 - Near-plane clipping for cube faces and loaded mesh triangles, preserving the visible portion of geometry that crosses the camera's near plane
 - Animated perspective-projected 3D cube with six face colors and all three rotation axes
@@ -43,6 +44,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Filled 3D geometry and floor-grid lines use a CPU-side Z-buffer for depth testing
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
+- **iPhone/iPad touch:** drag on the left half to move; drag on the right half to look around. Both can be used simultaneously.
 - **Esc:** release the mouse; press again to exit
 
 The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), mouse-look sensitivity, and a reminder of the main controls. F3 switches the cube and loaded OBJ meshes between filled polygons and wireframe outlines. Filled 3D triangles and floor-grid lines use a CPU-side Z-buffer, so nearer surfaces win per pixel instead of relying only on polygon draw order. Wireframe lines are not depth-tested yet. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
@@ -65,7 +67,7 @@ The collision module supports static axis-aligned bounding boxes (AABBs). Camera
 
 An iOS Simulator build is being added alongside the Windows build. The iOS target is packaged as an unsigned Xcode app bundle and includes the demo OBJ and PPM assets in the app's Resources directory. GitHub Actions builds an arm64 iOS Simulator artifact without requiring an Apple signing certificate.
 
-This is a build-foundation milestone only: touch controls, on-device performance tuning, device testing, and App Store signing/distribution are not complete yet. The simulator artifact is not installable on a physical iPhone.
+The iOS build includes an initial virtual joystick on the left and drag-to-look area on the right, with simultaneous movement and camera look. On-device performance tuning, physical-device testing, and App Store signing/distribution remain incomplete. The simulator artifact is not installable on a physical iPhone.
 
 ## Build on Windows
 

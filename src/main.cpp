@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -18,6 +19,17 @@ namespace {
 void logSdlError(const char* operation) {
     std::cerr << "[OriginalEngine] " << operation << " failed: "
               << SDL_GetError() << '\n';
+}
+
+void drawTouchCircle(SDL_Renderer* renderer, float cx, float cy, float radius) {
+    constexpr int segments = 32;
+    for (int i = 0; i < segments; ++i) {
+        const float a0 = static_cast<float>(i) * 6.28318530718F / static_cast<float>(segments);
+        const float a1 = static_cast<float>(i + 1) * 6.28318530718F / static_cast<float>(segments);
+        (void)SDL_RenderLine(renderer, cx + std::cos(a0) * radius,
+            cy + std::sin(a0) * radius, cx + std::cos(a1) * radius,
+            cy + std::sin(a1) * radius);
+    }
 }
 
 std::filesystem::path resolveAssetPath(const char* relativePath) {
@@ -132,13 +144,55 @@ int main(int argc, char* argv[]) {
         bool wireframe = false;
         bool animationPaused = false;
         bool fullscreen = false;
+        SDL_FingerID movementFinger = 0;
+        SDL_FingerID lookFinger = 0;
+        bool hasMovementFinger = false;
+        bool hasLookFinger = false;
+        float movementX = 0.0F;
+        float movementY = 0.0F;
+        float lookDeltaX = 0.0F;
+        float lookDeltaY = 0.0F;
         Uint64 previousTicks = SDL_GetTicks();
         double elapsedSeconds = 0.0;
 
         while (running && exitCode == 0) {
+            int touchWidth = 0;
+            int touchHeight = 0;
+            (void)SDL_GetRenderOutputSize(renderer, &touchWidth, &touchHeight);
             SDL_Event event{};
             while (SDL_PollEvent(&event)) {
-                if (event.type == SDL_EVENT_QUIT) {
+                if (!smokeTest && touchWidth > 0 && touchHeight > 0 &&
+                    (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION ||
+                     event.type == SDL_EVENT_FINGER_UP)) {
+                    if (event.type == SDL_EVENT_FINGER_DOWN) {
+                        if (event.tfinger.x < 0.5F && !hasMovementFinger) {
+                            movementFinger = event.tfinger.fingerID;
+                            hasMovementFinger = true;
+                            movementX = event.tfinger.x;
+                            movementY = event.tfinger.y;
+                        } else if (event.tfinger.x >= 0.5F && !hasLookFinger) {
+                            lookFinger = event.tfinger.fingerID;
+                            hasLookFinger = true;
+                        }
+                    } else if (event.type == SDL_EVENT_FINGER_MOTION) {
+                        if (hasMovementFinger && event.tfinger.fingerID == movementFinger) {
+                            movementX = event.tfinger.x;
+                            movementY = event.tfinger.y;
+                        } else if (hasLookFinger && event.tfinger.fingerID == lookFinger) {
+                            lookDeltaX += event.tfinger.dx * static_cast<float>(touchWidth);
+                            lookDeltaY += event.tfinger.dy * static_cast<float>(touchHeight);
+                        }
+                    } else {
+                        if (hasMovementFinger && event.tfinger.fingerID == movementFinger) {
+                            hasMovementFinger = false;
+                            movementX = 0.0F;
+                            movementY = 0.0F;
+                        }
+                        if (hasLookFinger && event.tfinger.fingerID == lookFinger) {
+                            hasLookFinger = false;
+                        }
+                    }
+                } else if (event.type == SDL_EVENT_QUIT) {
                     running = false;
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_R) {
@@ -214,8 +268,17 @@ int main(int argc, char* argv[]) {
                                     static_cast<float>(keys[SDL_SCANCODE_A]);
                 const float vertical = static_cast<float>(keys[SDL_SCANCODE_E]) -
                                        static_cast<float>(keys[SDL_SCANCODE_Q]);
-                const bool fast = keys[SDL_SCANCODE_LSHIFT] ||
-                                  keys[SDL_SCANCODE_RSHIFT];
+                const bool fast = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+                if (hasMovementFinger && touchWidth > 0 && touchHeight > 0) {
+                    const float anchorX = static_cast<float>(touchWidth) * 0.20F;
+                    const float anchorY = static_cast<float>(touchHeight) * 0.78F;
+                    const float radius = static_cast<float>(std::min(touchWidth, touchHeight)) * 0.14F;
+                    right = std::clamp((movementX * static_cast<float>(touchWidth) - anchorX) / radius, -1.0F, 1.0F);
+                    forward = std::clamp(-(movementY * static_cast<float>(touchHeight) - anchorY) / radius, -1.0F, 1.0F);
+                }
+                camera.rotate(lookDeltaX, lookDeltaY);
+                lookDeltaX = 0.0F;
+                lookDeltaY = 0.0F;
                 camera.move(forward, right, vertical, deltaSeconds, fast, &collisionWorld);
             }
 
@@ -232,6 +295,27 @@ int main(int argc, char* argv[]) {
                 std::cerr << "[OriginalEngine] Rendering a frame failed.\n";
                 exitCode = 1;
                 break;
+            }
+
+            if (!smokeTest) {
+                const float minDimension = static_cast<float>(std::min(width, height));
+                const float joyX = static_cast<float>(width) * 0.20F;
+                const float joyY = static_cast<float>(height) * 0.78F;
+                const float joyRadius = minDimension * 0.14F;
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(renderer, 210, 225, 245, 110);
+                drawTouchCircle(renderer, joyX, joyY, joyRadius);
+                drawTouchCircle(renderer, joyX, joyY, joyRadius * 0.38F);
+                if (hasMovementFinger) {
+                    const float knobX = joyX + std::clamp(movementX * static_cast<float>(width) - joyX, -joyRadius, joyRadius);
+                    const float knobY = joyY + std::clamp(movementY * static_cast<float>(height) - joyY, -joyRadius, joyRadius);
+                    SDL_SetRenderDrawColor(renderer, 120, 190, 255, 180);
+                    drawTouchCircle(renderer, knobX, knobY, joyRadius * 0.25F);
+                }
+                SDL_SetRenderDrawColor(renderer, 210, 225, 245, 90);
+                drawTouchCircle(renderer, static_cast<float>(width) * 0.82F,
+                                static_cast<float>(height) * 0.78F, minDimension * 0.12F);
+                (void)SDL_RenderPresent(renderer);
             }
 
             if (smokeTest) {
