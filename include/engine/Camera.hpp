@@ -11,6 +11,7 @@ public:
 
     void rotate(float mouseDeltaX, float mouseDeltaY);
     void reset() noexcept;
+    void adjustMouseSensitivity(float delta) noexcept;
     void move(float forwardAxis, float rightAxis, float verticalAxis,
               float deltaSeconds, bool fast = false,
               const CollisionWorld* collisionWorld = nullptr,
@@ -21,6 +22,7 @@ public:
     [[nodiscard]] float z() const noexcept { return z_; }
     [[nodiscard]] float yaw() const noexcept { return yaw_; }
     [[nodiscard]] float pitch() const noexcept { return pitch_; }
+    [[nodiscard]] float mouseSensitivity() const noexcept { return mouseSensitivity_; }
 
 private:
     float x_{0.0F};
@@ -28,6 +30,7 @@ private:
     float z_{0.0F};
     float yaw_{0.0F};
     float pitch_{0.0F};
+    float mouseSensitivity_{0.0025F};
 };
 
 } // namespace originalengine
