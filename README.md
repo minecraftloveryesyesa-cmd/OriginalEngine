@@ -69,6 +69,18 @@ An iOS Simulator build is being added alongside the Windows build. The iOS targe
 
 The iOS build includes an initial virtual joystick on the left and drag-to-look area on the right, with simultaneous movement and camera look. On-device performance tuning, physical-device testing, and App Store signing/distribution remain incomplete. The workflow currently builds an arm64 iOS Device app bundle and packages it as an unsigned IPA. It is not signed for installation; physical-device execution still requires an appropriate signing/install workflow and on-device testing.
 
+## GPU backend smoke test (experimental)
+
+The app has an opt-in `--gpu-smoke-test` mode that bypasses `SDL_Renderer`, creates an SDL GPU device, claims the window, acquires one swapchain texture, clears it, and submits one GPU command buffer. This checks the basic window/swapchain presentation path only; it does not load the HLSL shaders or render 3D geometry.
+
+On a GPU-capable Windows machine, build the app and run:
+
+```powershell
+.\\build\\Release\\originalengine_app.exe --gpu-smoke-test
+```
+
+A successful run is reported in the startup diagnostic log. This test is not currently part of CI and has not been verified on a physical iPhone/iPad.
+
 ## Build on Windows
 
 Run in a terminal with CMake and MSVC available:
@@ -167,6 +179,18 @@ Gasoline Engine は、C++20 を基盤として開発しているクロスプラ�
 - CMake 3.24 以降
 - C++20 対応コンパイラ
 - Git と初回構成時のインターネット接続（CMake が SDL3 をダウンロードします）
+
+## GPU バックエンドのスモークテスト（実験段階）
+
+`--gpu-smoke-test` を指定すると、通常の `SDL_Renderer` を作成せずに SDL GPU デバイスを作成し、ウィンドウを GPU に割り当て、スワップチェーンのテクスチャを取得して単色クリアした後、GPU コマンドバッファを送信します。これはウィンドウとスワップチェーンの基本的な表示経路を確認するテストです。HLSL シェーダーの読み込みや 3D メッシュの描画は行いません。
+
+Windows でビルドした後、次のコマンドで実行できます。
+
+```powershell
+.\\build\\Release\\originalengine_app.exe --gpu-smoke-test
+```
+
+成功・失敗は起動診断ログに記録されます。現時点では CI のテスト対象ではなく、実機 iPhone / iPad での動作も未確認です。
 
 ## Windows でビルドする
 
