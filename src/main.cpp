@@ -22,7 +22,7 @@ void logSdlError(const char* operation) {
 
 std::filesystem::path resolveAssetPath(const char* relativePath) {
     const std::filesystem::path relative(relativePath);
-    // SDL_GetBasePath returns SDL-managed memory; release it on every return path.
+    // SDL3 returns a cached path string owned by SDL.
     const char* basePath = SDL_GetBasePath();
     if (basePath != nullptr) {
         const std::filesystem::path executablePath(basePath);
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
     if (!smokeTest) {
         SDL_SetRenderVSync(renderer, 1);
         SDL_SetWindowTitle(window,
-            "Gasoline Engine | WASD move, Q/E up/down, Shift fast | R: reset camera | Space: pause animation | 1/2: toggle objects | F3: wireframe");
+            "Gasoline Engine | WASD move, Q/E up/down, Shift fast | R: reset camera | Space: pause animation | F11: fullscreen | 1/2: toggle objects | F3: wireframe");
     }
 
     int exitCode = 0;
@@ -131,6 +131,7 @@ int main(int argc, char* argv[]) {
         bool mouseCaptured = false;
         bool wireframe = false;
         bool animationPaused = false;
+        bool fullscreen = false;
         Uint64 previousTicks = SDL_GetTicks();
         double elapsedSeconds = 0.0;
 
@@ -145,6 +146,14 @@ int main(int argc, char* argv[]) {
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_SPACE) {
                     animationPaused = !animationPaused;
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_F11) {
+                    const bool requestedFullscreen = !fullscreen;
+                    if (SDL_SetWindowFullscreen(window, requestedFullscreen)) {
+                        fullscreen = requestedFullscreen;
+                    } else {
+                        logSdlError("SDL_SetWindowFullscreen");
+                    }
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_F3) {
                     wireframe = !wireframe;
