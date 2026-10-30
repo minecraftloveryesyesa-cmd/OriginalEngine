@@ -74,9 +74,7 @@ bool runGpuClearSmokeTest(SDL_Window* window) {
                 (void)SDL_CancelGPUCommandBuffer(commandBuffer);
             } else if (swapchainTexture == nullptr || width == 0 || height == 0) {
                 writeDiagnostic("GPU smoke test skipped drawing because the swapchain has no drawable texture");
-                if (SDL_SubmitGPUCommandBuffer(commandBuffer)) {
-                    success = true;
-                } else {
+                if (!SDL_SubmitGPUCommandBuffer(commandBuffer)) {
                     writeDiagnostic(std::string("SDL_SubmitGPUCommandBuffer failed: ") + SDL_GetError());
                 }
             } else {
