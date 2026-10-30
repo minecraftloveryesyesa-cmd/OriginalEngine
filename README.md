@@ -20,6 +20,7 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Press F3 to toggle wireframe rendering for the cube and loaded OBJ meshes
 - Press F11 to toggle between windowed and fullscreen display
 - Press R to reset the camera; press Space to pause or resume demo animation
+- Press - / + to decrease or increase mouse-look sensitivity
 - Filled triangles and floor-grid lines use a CPU-side Z-buffer for per-pixel visibility
 - Software filled rendering is capped at 360,000 pixels per frame and scaled by SDL, preventing high-DPI windows and resizing from causing unbounded CPU and memory use
 - World-space perspective floor grid that responds to camera movement and is occluded by nearer geometry
@@ -38,12 +39,13 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **F11:** toggle windowed/fullscreen mode
 - **R:** reset camera position and view direction
 - **Space:** pause/resume demo animation
+- **- / +:** decrease/increase mouse-look sensitivity (bounded between 0.0005 and 0.01)
 - Filled 3D geometry and floor-grid lines use a CPU-side Z-buffer for depth testing
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
 - **Esc:** release the mouse; press again to exit
 
-The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), and a reminder of the main controls. F3 switches the cube and loaded OBJ meshes between filled polygons and wireframe outlines. Filled 3D triangles and floor-grid lines use a CPU-side Z-buffer, so nearer surfaces win per pixel instead of relying only on polygon draw order. Wireframe lines are not depth-tested yet. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
+The top-left debug overlay displays a smoothed FPS estimate, camera position (X/Y/Z), mouse-look sensitivity, and a reminder of the main controls. F3 switches the cube and loaded OBJ meshes between filled polygons and wireframe outlines. Filled 3D triangles and floor-grid lines use a CPU-side Z-buffer, so nearer surfaces win per pixel instead of relying only on polygon draw order. Wireframe lines are not depth-tested yet. It uses SDL3's built-in debug text renderer, so no font or SDL_ttf asset is required.
 
 ## OBJ mesh loader prototype
 
