@@ -73,8 +73,12 @@ bool runGpuClearSmokeTest(SDL_Window* window) {
                 writeDiagnostic(std::string("SDL_WaitAndAcquireGPUSwapchainTexture failed: ") + SDL_GetError());
                 (void)SDL_CancelGPUCommandBuffer(commandBuffer);
             } else if (swapchainTexture == nullptr || width == 0 || height == 0) {
-                writeDiagnostic("GPU smoke test did not receive a drawable swapchain texture");
-                (void)SDL_CancelGPUCommandBuffer(commandBuffer);
+                writeDiagnostic("GPU smoke test skipped drawing because the swapchain has no drawable texture");
+                if (SDL_SubmitGPUCommandBuffer(commandBuffer)) {
+                    success = true;
+                } else {
+                    writeDiagnostic(std::string("SDL_SubmitGPUCommandBuffer failed: ") + SDL_GetError());
+                }
             } else {
                 SDL_GPUColorTargetInfo colorTarget{};
                 colorTarget.texture = swapchainTexture;
@@ -85,7 +89,11 @@ bool runGpuClearSmokeTest(SDL_Window* window) {
                     SDL_BeginGPURenderPass(commandBuffer, &colorTarget, 1, nullptr);
                 if (renderPass == nullptr) {
                     writeDiagnostic(std::string("SDL_BeginGPURenderPass failed: ") + SDL_GetError());
-                    (void)SDL_CancelGPUCommandBuffer(commandBuffer);
+                    // A swapchain texture has already been acquired, so the
+                    // command buffer must be submitted rather than cancelled.
+                    if (!SDL_SubmitGPUCommandBuffer(commandBuffer)) {
+                        writeDiagnostic(std::string("SDL_SubmitGPUCommandBuffer failed: ") + SDL_GetError());
+                    }
                 } else {
                     SDL_EndGPURenderPass(renderPass);
                     if (SDL_SubmitGPUCommandBuffer(commandBuffer)) {
