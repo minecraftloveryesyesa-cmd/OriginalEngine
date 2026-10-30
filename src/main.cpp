@@ -262,9 +262,9 @@ int main(int argc, char* argv[]) {
 
             if (!smokeTest) {
                 const bool* keys = SDL_GetKeyboardState(nullptr);
-                const float forward = static_cast<float>(keys[SDL_SCANCODE_W]) -
+                float forward = static_cast<float>(keys[SDL_SCANCODE_W]) -
                                       static_cast<float>(keys[SDL_SCANCODE_S]);
-                const float right = static_cast<float>(keys[SDL_SCANCODE_D]) -
+                float right = static_cast<float>(keys[SDL_SCANCODE_D]) -
                                     static_cast<float>(keys[SDL_SCANCODE_A]);
                 const float vertical = static_cast<float>(keys[SDL_SCANCODE_E]) -
                                        static_cast<float>(keys[SDL_SCANCODE_Q]);
