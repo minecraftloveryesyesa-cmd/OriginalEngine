@@ -18,6 +18,8 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - Renders multiple visible scene objects from shared OBJ mesh data, applying each object's position, rotation, scale, and visibility flag
 - Press 1 or 2 to toggle the visibility of each demo pyramid at runtime
 - Press F3 to toggle wireframe rendering for the cube and loaded OBJ meshes
+- Press F11 to toggle between windowed and fullscreen display
+- Press R to reset the camera; press Space to pause or resume demo animation
 - Filled triangles and floor-grid lines use a CPU-side Z-buffer for per-pixel visibility
 - Software filled rendering is capped at 360,000 pixels per frame and scaled by SDL, preventing high-DPI windows and resizing from causing unbounded CPU and memory use
 - World-space perspective floor grid that responds to camera movement and is occluded by nearer geometry
@@ -33,6 +35,9 @@ A cross-platform game-engine project, starting with a C++20 foundation.
 - **Left or right Shift:** move faster
 - **1:** show or hide the right demo pyramid; **2:** show or hide the left demo pyramid
 - **F3:** toggle wireframe mode for the cube and OBJ meshes
+- **F11:** toggle windowed/fullscreen mode
+- **R:** reset camera position and view direction
+- **Space:** pause/resume demo animation
 - Filled 3D geometry and floor-grid lines use a CPU-side Z-buffer for depth testing
 - **Right mouse button:** capture/release the mouse for looking around
 - **Mouse movement:** look around while captured
@@ -42,7 +47,7 @@ The top-left debug overlay displays a smoothed FPS estimate, camera position (X/
 
 ## OBJ mesh loader prototype
 
-`ObjMeshLoader` reads Wavefront OBJ positions (`v`), texture coordinates (`vt`), normals (`vn`), and faces (`f`), triangulates polygon faces, and supports positive and negative indices for each attribute. Vertices are split when a single position is referenced with different UV or normal indices. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded once and instanced twice in the demo scene; each visible scene object is rendered with its own position, rotation, and scale. Scene objects marked invisible are skipped by the renderer. OBJ UV coordinates are used for perspective-correct per-pixel texture mapping when a texture is assigned to a mesh instance. The renderer currently supports ASCII P3 PPM textures and keeps the CPU Z-buffer and existing vertex lighting. MTL material parsing and PNG/JPEG/BMP decoding are not implemented yet. Triangles crossing the camera's near plane are clipped in camera space before projection.
+`ObjMeshLoader` reads Wavefront OBJ positions (`v`), texture coordinates (`vt`), normals (`vn`), and faces (`f`), triangulates polygon faces, and supports positive and negative indices for each attribute. Vertices are split when a single position is referenced with different UV or normal indices. It validates face indices and leaves the caller's existing mesh unchanged on failure. The bundled `assets/demo.obj` pyramid is loaded once and instanced twice in the demo scene; each visible scene object is rendered with its own position, rotation, and scale. Scene objects marked invisible are skipped by the renderer. OBJ UV coordinates are used for perspective-correct per-pixel texture mapping when a texture is assigned to a mesh instance. The renderer currently supports ASCII P3 PPM and BMP textures and keeps the CPU Z-buffer and existing vertex lighting. MTL material parsing and PNG/JPEG decoding are not implemented yet. Triangles crossing the camera's near plane are clipped in camera space before projection.
 
 ## Collision prototype
 
