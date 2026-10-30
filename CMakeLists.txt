@@ -59,7 +59,10 @@ if(ORIGINALENGINE_BUILD_APP)
             target_link_libraries(originalengine PUBLIC SDL3::SDL3)
         endif()
 
-        add_executable(originalengine_app src/main.cpp)
+        add_executable(originalengine_app
+            src/main.cpp
+            src/engine/GpuDeviceProbe.cpp
+        )
         target_link_libraries(originalengine_app PRIVATE originalengine)
         target_compile_definitions(originalengine_app PRIVATE ORIGINALENGINE_USE_SDL3=1)
 
