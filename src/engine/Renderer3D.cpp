@@ -90,6 +90,67 @@ bool loadPpmTexture(const std::string& path, TextureImage& texture) {
     return true;
 }
 
+bool loadBmpTexture(const std::string& path, TextureImage& texture) {
+    SDL_Surface* loaded = SDL_LoadBMP(path.c_str());
+    if (loaded == nullptr) {
+        return false;
+    }
+
+    SDL_Surface* converted = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+    SDL_DestroySurface(loaded);
+    if (converted == nullptr) {
+        return false;
+    }
+
+    const auto destroyConverted = [&]() { SDL_DestroySurface(converted); };
+    if (converted->w <= 0 || converted->h <= 0 ||
+        converted->w > 16384 || converted->h > 16384) {
+        destroyConverted();
+        return false;
+    }
+
+    const auto pixelCount = static_cast<std::size_t>(converted->w) *
+                            static_cast<std::size_t>(converted->h);
+    if (pixelCount > 16U * 1024U * 1024U ||
+        converted->pitch < converted->w * 4) {
+        destroyConverted();
+        return false;
+    }
+
+    TextureImage loadedTexture;
+    loadedTexture.width = converted->w;
+    loadedTexture.height = converted->h;
+    loadedTexture.pixels.resize(pixelCount * 4U);
+    const auto* source = static_cast<const Uint8*>(converted->pixels);
+    for (int y = 0; y < converted->h; ++y) {
+        const auto* sourceRow = source + static_cast<std::size_t>(y) *
+                                         static_cast<std::size_t>(converted->pitch);
+        auto* destinationRow = loadedTexture.pixels.data() +
+                               static_cast<std::size_t>(y) *
+                               static_cast<std::size_t>(converted->w) * 4U;
+        std::copy_n(sourceRow, static_cast<std::size_t>(converted->w) * 4U,
+                    destinationRow);
+    }
+    destroyConverted();
+    texture = std::move(loadedTexture);
+    return true;
+}
+
+bool loadTexture(const std::string& path, TextureImage& texture) {
+    const std::filesystem::path filePath(path);
+    std::string extension = filePath.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+    if (extension == ".ppm" || extension == ".pnm") {
+        return loadPpmTexture(path, texture);
+    }
+    if (extension == ".bmp") {
+        return loadBmpTexture(path, texture);
+    }
+    return false;
+}
+
 SDL_Color sampleTexture(const TextureImage& texture, float u, float v) {
     if (texture.width <= 0 || texture.height <= 0 || texture.pixels.empty() ||
         !std::isfinite(u) || !std::isfinite(v)) {
@@ -579,11 +640,11 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
             auto cached = textureCache_.find(instance.texturePath);
             if (cached == textureCache_.end()) {
                 TextureImage loaded;
-                if (loadPpmTexture(instance.texturePath, loaded)) {
+                if (loadTexture(instance.texturePath, loaded)) {
                     cached = textureCache_.emplace(instance.texturePath, std::move(loaded)).first;
                 } else {
-                    SDL_Log("Could not load P3 PPM texture '%s' (working directory: '%s'); "
-                            "expected an ASCII PPM file beginning with P3. Rendering without texture.",
+                    SDL_Log("Could not load texture '%s' (working directory: '%s'); "
+                            "supported formats are P3 PPM and BMP. Rendering without texture.",
                             instance.texturePath.c_str(), std::filesystem::current_path().string().c_str());
                     cached = textureCache_.emplace(instance.texturePath, TextureImage{}).first;
                 }
