@@ -73,12 +73,16 @@ jobs:
         run: |
           mkdir -p ipa/Payload
           cp -R build-ios/Release-iphoneos/originalengine_app.app ipa/Payload/
-          /usr/bin/zip -qry ipa/GasolineEngine-iOS-unsigned.ipa Payload
+          cd ipa
+          /usr/bin/zip -qry GasolineEngine-iOS-unsigned.ipa Payload
 
       - name: Verify IPA
         run: |
           test -s ipa/GasolineEngine-iOS-unsigned.ipa
+          /usr/bin/unzip -t ipa/GasolineEngine-iOS-unsigned.ipa
           /usr/bin/unzip -l ipa/GasolineEngine-iOS-unsigned.ipa
+          /usr/bin/unzip -Z1 ipa/GasolineEngine-iOS-unsigned.ipa | grep -q '^Payload/originalengine_app.app/Info.plist$'
+          /usr/bin/unzip -Z1 ipa/GasolineEngine-iOS-unsigned.ipa | grep -q '^Payload/originalengine_app.app/originalengine_app$'
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
