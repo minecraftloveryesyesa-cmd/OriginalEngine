@@ -67,7 +67,7 @@ The collision module supports static axis-aligned bounding boxes (AABBs). Camera
 
 An iOS Simulator build is being added alongside the Windows build. The iOS target is packaged as an unsigned Xcode app bundle and includes the demo OBJ and PPM assets in the app's Resources directory. GitHub Actions builds an arm64 iOS Simulator artifact without requiring an Apple signing certificate.
 
-The iOS build includes an initial virtual joystick on the left and drag-to-look area on the right, with simultaneous movement and camera look. On-device performance tuning, physical-device testing, and App Store signing/distribution remain incomplete. The simulator artifact is not installable on a physical iPhone.
+The iOS build includes an initial virtual joystick on the left and drag-to-look area on the right, with simultaneous movement and camera look. On-device performance tuning, physical-device testing, and App Store signing/distribution remain incomplete. The workflow currently builds an arm64 iOS Device app bundle and packages it as an unsigned IPA. It is not signed for installation; physical-device execution still requires an appropriate signing/install workflow and on-device testing.
 
 ## Build on Windows
 
@@ -136,7 +136,7 @@ Gasoline Engine は、C++20 を基盤として開発しているクロスプラ�
 - 塗りつぶしポリゴンとフロアグリッド線に対応した CPU 側 Z バッファによるピクセル単位の奥行き判定
 - GitHub Actions による Windows 実行ファイルのビルド、カメラ・衝突判定・シーン管理・OBJ ローダーのユニットテスト、描画スモークテスト、および成果物のアップロード
 
-> 現在の描画機能は、CPU 側で透視投影を行い、SDL で三角形をラスタライズする初期段階の試作です。まだ最新の GPU 3D パイプラインではありません。奥行きの判定にはペインターアルゴリズムを使用しているため、交差するポリゴンや複雑なシーンでは制限があります。将来的には Z バッファによる奥行き判定が必要です。近接平面を横切るポリゴンは、全体を破棄せずにクリッピングしてから描画します。
+> 現在の描画機能は CPU 側のソフトウェアラスタライザーです。透視投影、ピクセル単位の Z バッファ、透視補正付き UV テクスチャ描画、近接平面クリッピング、深度判定付きワイヤーフレームに対応しています。SDL_Renderer は完成した CPU 描画バッファの表示に使用しています。まだ SDL GPU API を使った GPU 3D パイプラインは実装されていません。
 
 ## カメラ操作
 
@@ -150,11 +150,11 @@ Gasoline Engine は、C++20 を基盤として開発しているクロスプラ�
 - **マウス移動：** マウス捕捉中に視点を操作
 - **Esc：** マウス捕捉を解除。もう一度押すと終了
 
-画面左上のデバッグ HUD には、平滑化した FPS の推定値、カメラ座標（X/Y/Z）、主な操作方法が表示されます。塗りつぶしポリゴンとフロアグリッド線は CPU 側の Z バッファで奥行き判定され、手前のジオメトリが奥のグリッド線を隠します。ワイヤーフレーム線はまだ深度判定されません。SDL3 標準のデバッグ文字描画機能を使うため、フォントファイルや SDL_ttf は必要ありません。
+画面左上のデバッグ HUD には、平滑化した FPS の推定値、カメラ座標（X/Y/Z）、主な操作方法が表示されます。塗りつぶしポリゴン、フロアグリッド線、ワイヤーフレーム線は CPU 側の Z バッファで奥行き判定されます。SDL3 標準のデバッグ文字描画機能を使うため、フォントファイルや SDL_ttf は必要ありません。
 
 ## OBJ メッシュローダー（試作）
 
-`ObjMeshLoader` は Wavefront OBJ の `v`（頂点）と `f`（面）レコードを読み込みます。多角形の面を三角形に分割し、正の頂点インデックスと負の頂点インデックスの両方に対応します。OBJ の UV 座標を使った透視補正付きのピクセル単位テクスチャ描画に対応しました。現時点では ASCII 形式の P3 PPM テクスチャを読み込み、CPU 側の Z バッファと既存の頂点ライティングを維持します。MTL マテリアル解析や PNG/JPEG/BMP のデコードは未実装です。面のインデックスを検証し、読み込みに失敗した場合は呼び出し元の既存メッシュを変更しません。
+`ObjMeshLoader` は Wavefront OBJ の `v`（頂点）と `f`（面）レコードを読み込みます。多角形の面を三角形に分割し、正の頂点インデックスと負の頂点インデックスの両方に対応します。OBJ の UV 座標を使った透視補正付きのピクセル単位テクスチャ描画に対応しました。現時点では ASCII 形式の P3 PPM と BMP テクスチャを読み込み、CPU 側の Z バッファと既存の頂点ライティングを維持します。MTL マテリアル解析や PNG/JPEG のデコードは未実装です。面のインデックスを検証し、読み込みに失敗した場合は呼び出し元の既存メッシュを変更しません。
 
 同梱の `assets/demo.obj` にあるピラミッドは一度読み込まれ、デモシーン内の 2 つのオブジェクトで共有されます。表示状態のオブジェクトは、それぞれの位置・回転・拡大縮小を反映して描画されます。非表示に設定されたオブジェクトは描画されません。OBJ の UV 座標を使った透視補正付きのピクセル単位テクスチャ描画に対応しました。現時点では ASCII 形式の P3 PPM テクスチャを読み込み、CPU 側の Z バッファと既存の頂点ライティングを維持します。MTL マテリアル解析や PNG/JPEG/BMP のデコードは未実装です。カメラの近接平面を横切る三角形は、投影の前にカメラ座標系でクリッピングされます。
 
@@ -203,7 +203,7 @@ tests/                カメラ・衝突判定・シーンなどのテスト
 1. アプリケーションとビルド環境の基礎
 2. 3D 透視投影とカラーキューブ
 3. 一人称カメラと移動操作
-4. GPU 描画と奥行き判定
+4. SDL GPU API による GPU 描画（CPU 描画へのフォールバックを維持）
 5. シーンオブジェクトと読み込んだメッシュの描画
 6. テクスチャ / マテリアル、音声、物理演算
 7. 対応プラットフォームの拡張
