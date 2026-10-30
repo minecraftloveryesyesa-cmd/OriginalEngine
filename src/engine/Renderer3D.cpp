@@ -872,6 +872,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     SDL_SetRenderDrawColor(renderer_, 232, 239, 250, 255);
     char fpsText[64]{};
     char positionText[96]{};
+    char sensitivityText[64]{};
     std::snprintf(fpsText, sizeof(fpsText), "FPS: %.1f", smoothedFramesPerSecond_);
     std::snprintf(positionText, sizeof(positionText),
                   "Camera: X %.2f  Y %.2f  Z %.2f",
@@ -880,6 +881,9 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                   static_cast<double>(camera.z()));
     (void)SDL_RenderDebugText(renderer_, 12.0F, 12.0F, fpsText);
     (void)SDL_RenderDebugText(renderer_, 12.0F, 28.0F, positionText);
+    std::snprintf(sensitivityText, sizeof(sensitivityText), "Mouse sensitivity: %.4f",
+                  static_cast<double>(camera.mouseSensitivity()));
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 44.0F, sensitivityText);
     char statsText[128]{};
     const std::size_t visibleObjects = static_cast<std::size_t>(std::count_if(
         meshInstances.begin(), meshInstances.end(), [](const MeshInstance& instance) {
@@ -889,13 +893,13 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     std::snprintf(statsText, sizeof(statsText),
                   "Triangles: %zu  Culled: %zu  Objects: %zu  Render: %dx%d",
                   renderedTriangles, culledTriangles, visibleObjects, width, height);
-    (void)SDL_RenderDebugText(renderer_, 12.0F, 44.0F, statsText);
-    (void)SDL_RenderDebugText(renderer_, 12.0F, 60.0F,
-                              "WASD Move | Q/E Up/Down | Shift Sprint");
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 60.0F, statsText);
     (void)SDL_RenderDebugText(renderer_, 12.0F, 76.0F,
-                              "1/2 Toggle Pyramids | F3 Wireframe | Right-click Mouse Look | Esc Exit");
+                              "WASD Move | Q/E Up/Down | Shift Sprint");
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 92.0F,
+                              "+/- Mouse Sensitivity | 1/2 Toggle | F3 Wireframe | F11 Fullscreen");
     if (wireframe) {
-        (void)SDL_RenderDebugText(renderer_, 12.0F, 92.0F, "Wireframe: ON");
+        (void)SDL_RenderDebugText(renderer_, 12.0F, 108.0F, "Wireframe: ON");
     }
 
     SDL_RenderPresent(renderer_);
