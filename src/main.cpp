@@ -329,7 +329,7 @@ int main(int argc, char* argv[]) {
         while (running && exitCode == 0) {
             int touchWidth = 0;
             int touchHeight = 0;
-            (void)SDL_GetRenderOutputSize(renderer, &touchWidth, &touchHeight);
+            (void)SDL_GetWindowSizeInPixels(window, &touchWidth, &touchHeight);
             SDL_Event event{};
             while (SDL_PollEvent(&event)) {
                 if (!smokeTest && touchWidth > 0 && touchHeight > 0 &&
@@ -538,6 +538,15 @@ int main(int argc, char* argv[]) {
                 SDL_SetRenderDrawColor(renderer, 210, 225, 245, 90);
                 drawTouchCircle(renderer, static_cast<float>(width) * 0.82F,
                                 static_cast<float>(height) * 0.78F, minDimension * 0.12F);
+
+                SDL_FRect backendButton{
+                    static_cast<float>(width) - 116.0F, 18.0F, 98.0F, 42.0F
+                };
+                SDL_SetRenderDrawColor(renderer, 28, 112, 160, 220);
+                (void)SDL_RenderFillRect(renderer, &backendButton);
+                SDL_SetRenderDrawColor(renderer, 245, 250, 255, 255);
+                (void)SDL_RenderDebugText(renderer, backendButton.x + 24.0F,
+                    backendButton.y + 14.0F, "GPU");
             }
 
             // Present exactly once per frame, after the 2D touch controls.
