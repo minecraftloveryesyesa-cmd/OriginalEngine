@@ -46,6 +46,24 @@ int main() {
         return 1;
     }
 
+    const float defaultSensitivity = camera.mouseSensitivity();
+    camera.adjustMouseSensitivity(0.0005F);
+    if (!nearlyEqual(camera.mouseSensitivity(), defaultSensitivity + 0.0005F)) {
+        std::cerr << "Mouse sensitivity increase failed.\\n";
+        return 1;
+    }
+    camera.adjustMouseSensitivity(-1.0F);
+    if (!nearlyEqual(camera.mouseSensitivity(), 0.0005F)) {
+        std::cerr << "Mouse sensitivity lower clamp failed.\\n";
+        return 1;
+    }
+    camera.adjustMouseSensitivity(1.0F);
+    if (!nearlyEqual(camera.mouseSensitivity(), 0.01F)) {
+        std::cerr << "Mouse sensitivity upper clamp failed.\\n";
+        return 1;
+    }
+    camera.adjustMouseSensitivity(defaultSensitivity - camera.mouseSensitivity());
+
     camera.reset();
     if (!nearlyEqual(camera.x(), 0.0F) || !nearlyEqual(camera.y(), 0.0F) ||
         !nearlyEqual(camera.z(), 0.0F) || !nearlyEqual(camera.yaw(), 0.0F) ||
