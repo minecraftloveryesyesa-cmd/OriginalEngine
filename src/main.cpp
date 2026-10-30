@@ -46,6 +46,63 @@ void logSdlError(const char* operation) {
         (std::string(operation) + " failed. Details saved to startup.log.").c_str(), nullptr);
 }
 
+bool runGpuClearSmokeTest(SDL_Window* window) {
+    constexpr SDL_GPUShaderFormat formats =
+        SDL_GPU_SHADERFORMAT_SPIRV |
+        SDL_GPU_SHADERFORMAT_DXIL |
+        SDL_GPU_SHADERFORMAT_MSL;
+    SDL_GPUDevice* device = SDL_CreateGPUDevice(formats, false, nullptr);
+    if (device == nullptr) {
+        writeDiagnostic(std::string("SDL_CreateGPUDevice failed: ") + SDL_GetError());
+        return false;
+    }
+
+    bool success = false;
+    if (!SDL_ClaimWindowForGPUDevice(device, window)) {
+        writeDiagnostic(std::string("SDL_ClaimWindowForGPUDevice failed: ") + SDL_GetError());
+    } else {
+        SDL_GPUCommandBuffer* commandBuffer = SDL_AcquireGPUCommandBuffer(device);
+        if (commandBuffer == nullptr) {
+            writeDiagnostic(std::string("SDL_AcquireGPUCommandBuffer failed: ") + SDL_GetError());
+        } else {
+            SDL_GPUTexture* swapchainTexture = nullptr;
+            Uint32 width = 0;
+            Uint32 height = 0;
+            if (!SDL_WaitAndAcquireGPUSwapchainTexture(
+                    commandBuffer, window, &swapchainTexture, &width, &height)) {
+                writeDiagnostic(std::string("SDL_WaitAndAcquireGPUSwapchainTexture failed: ") + SDL_GetError());
+                (void)SDL_CancelGPUCommandBuffer(commandBuffer);
+            } else if (swapchainTexture == nullptr || width == 0 || height == 0) {
+                writeDiagnostic("GPU smoke test did not receive a drawable swapchain texture");
+                (void)SDL_CancelGPUCommandBuffer(commandBuffer);
+            } else {
+                SDL_GPUColorTargetInfo colorTarget{};
+                colorTarget.texture = swapchainTexture;
+                colorTarget.clear_color = SDL_FColor{0.035F, 0.055F, 0.09F, 1.0F};
+                colorTarget.load_op = SDL_GPU_LOADOP_CLEAR;
+                colorTarget.store_op = SDL_GPU_STOREOP_STORE;
+                SDL_GPURenderPass* renderPass =
+                    SDL_BeginGPURenderPass(commandBuffer, &colorTarget, 1, nullptr);
+                if (renderPass == nullptr) {
+                    writeDiagnostic(std::string("SDL_BeginGPURenderPass failed: ") + SDL_GetError());
+                    (void)SDL_CancelGPUCommandBuffer(commandBuffer);
+                } else {
+                    SDL_EndGPURenderPass(renderPass);
+                    if (SDL_SubmitGPUCommandBuffer(commandBuffer)) {
+                        writeDiagnostic("GPU smoke test passed: swapchain acquired, cleared, and submitted");
+                        success = true;
+                    } else {
+                        writeDiagnostic(std::string("SDL_SubmitGPUCommandBuffer failed: ") + SDL_GetError());
+                    }
+                }
+            }
+        }
+        SDL_ReleaseWindowFromGPUDevice(device, window);
+    }
+    SDL_DestroyGPUDevice(device);
+    return success;
+}
+
 void drawTouchCircle(SDL_Renderer* renderer, float cx, float cy, float radius) {
     constexpr int segments = 32;
     for (int i = 0; i < segments; ++i) {
@@ -84,6 +141,7 @@ std::filesystem::path resolveAssetPath(const char* relativePath) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    const bool gpuSmokeTest = argc > 1 && std::string_view(argv[1]) == "--gpu-smoke-test";
     const bool smokeTest = argc > 1 && std::string_view(argv[1]) == "--smoke-test";
     initializeDiagnosticLog();
     writeDiagnostic("Stage: entering main");
@@ -101,7 +159,7 @@ int main(int argc, char* argv[]) {
         smokeTest ? "OriginalEngine - CI Smoke Test" : "OriginalEngine - 3D Camera Demo",
         windowWidth,
         windowHeight,
-        SDL_WINDOW_RESIZABLE
+        SDL_WINDOW_RESIZABLE | (gpuSmokeTest ? SDL_WINDOW_GPU : 0)
     );
 
     if (window == nullptr) {
@@ -111,6 +169,13 @@ int main(int argc, char* argv[]) {
     }
 
     writeDiagnostic("Stage: SDL_CreateWindow succeeded");
+    if (gpuSmokeTest) {
+        const bool passed = runGpuClearSmokeTest(window);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return passed ? 0 : 1;
+    }
+
     SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (renderer == nullptr) {
         logSdlError("SDL_CreateRenderer");
