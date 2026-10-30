@@ -16,6 +16,12 @@
 
 namespace {
 
+struct SdlFreeDeleter {
+    void operator()(char* pointer) const noexcept {
+        SDL_free(pointer);
+    }
+};
+
 void logSdlError(const char* operation) {
     std::cerr << "[OriginalEngine] " << operation << " failed: "
               << SDL_GetError() << '\n';
@@ -24,7 +30,7 @@ void logSdlError(const char* operation) {
 std::filesystem::path resolveAssetPath(const char* relativePath) {
     const std::filesystem::path relative(relativePath);
     // SDL_GetBasePath returns SDL-managed memory; release it on every return path.
-    std::unique_ptr<char, decltype(&SDL_free)> basePath(SDL_GetBasePath(), SDL_free);
+    std::unique_ptr<char, SdlFreeDeleter> basePath(SDL_GetBasePath());
     if (basePath != nullptr) {
         const std::filesystem::path executablePath(basePath.get());
         const std::filesystem::path besideExecutable = executablePath / relative;
@@ -81,7 +87,7 @@ int main(int argc, char* argv[]) {
     if (!smokeTest) {
         SDL_SetRenderVSync(renderer, 1);
         SDL_SetWindowTitle(window,
-            "OriginalEngine | WASD move, Q/E up/down, Shift fast | 1/2: toggle pyramids | Right-click: mouse look | Esc: exit");
+            "Gasoline Engine | WASD move, Q/E up/down, Shift fast | R: reset camera | Space: pause animation | 1/2: toggle objects | F3: wireframe");
     }
 
     int exitCode = 0;
@@ -131,6 +137,7 @@ int main(int argc, char* argv[]) {
         bool running = true;
         bool mouseCaptured = false;
         bool wireframe = false;
+        bool animationPaused = false;
         Uint64 previousTicks = SDL_GetTicks();
         double elapsedSeconds = 0.0;
 
@@ -139,6 +146,12 @@ int main(int argc, char* argv[]) {
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_EVENT_QUIT) {
                     running = false;
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_r) {
+                    camera.reset();
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_SPACE) {
+                    animationPaused = !animationPaused;
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_F3) {
                     wireframe = !wireframe;
@@ -181,7 +194,9 @@ int main(int argc, char* argv[]) {
             const float deltaSeconds = std::min(
                 static_cast<float>(currentTicks - previousTicks) / 1000.0F, 0.1F);
             previousTicks = currentTicks;
-            elapsedSeconds += static_cast<double>(deltaSeconds);
+            if (!animationPaused) {
+                elapsedSeconds += static_cast<double>(deltaSeconds);
+            }
 
             if (!smokeTest) {
                 const bool* keys = SDL_GetKeyboardState(nullptr);
