@@ -10,6 +10,7 @@ public:
     Camera() = default;
 
     void rotate(float mouseDeltaX, float mouseDeltaY);
+    void reset() noexcept;
     void move(float forwardAxis, float rightAxis, float verticalAxis,
               float deltaSeconds, bool fast = false,
               const CollisionWorld* collisionWorld = nullptr,
