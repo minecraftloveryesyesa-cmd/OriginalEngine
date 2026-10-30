@@ -193,6 +193,40 @@ Vec3 toCameraSpace(Vec3 world, const Camera& camera) {
     return p;
 }
 
+struct TexturedClipVertex {
+    Vec3 position;
+    float u{0.0F};
+    float v{0.0F};
+};
+
+std::vector<TexturedClipVertex> clipTexturedTriangleAgainstNearPlane(
+    const std::array<TexturedClipVertex, 3>& triangle, float nearPlane) {
+    std::vector<TexturedClipVertex> clipped;
+    clipped.reserve(4);
+    TexturedClipVertex previous = triangle.back();
+    bool previousInside = previous.position.z > nearPlane;
+    for (const TexturedClipVertex& current : triangle) {
+        const bool currentInside = current.position.z > nearPlane;
+        if (currentInside != previousInside) {
+            const float denominator = current.position.z - previous.position.z;
+            if (std::abs(denominator) > 1.0e-7F) {
+                const float t = (nearPlane - previous.position.z) / denominator;
+                clipped.push_back({
+                    {previous.position.x + (current.position.x - previous.position.x) * t,
+                     previous.position.y + (current.position.y - previous.position.y) * t,
+                     nearPlane},
+                    previous.u + (current.u - previous.u) * t,
+                    previous.v + (current.v - previous.v) * t
+                });
+            }
+        }
+        if (currentInside) clipped.push_back(current);
+        previous = current;
+        previousInside = currentInside;
+    }
+    return clipped;
+}
+
 std::vector<Vec3> clipAgainstNearPlane(const std::vector<Vec3>& polygon, float nearPlane) {
     std::vector<Vec3> clipped;
     if (polygon.empty()) {
@@ -662,8 +696,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         triangles.reserve(mesh.triangles.size());
 
         for (const MeshTriangle& triangle : mesh.triangles) {
-            std::vector<Vec3> polygon;
-            polygon.reserve(3);
+            std::array<TexturedClipVertex, 3> sourcePolygon{};
             bool valid = true;
             std::array<const MeshVertex*, 3> sourceVertices{};
             std::size_t sourceCorner = 0;
@@ -686,21 +719,35 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 point.y += meshTransform.position.y;
                 point.z += meshTransform.position.z;
                 point = toCameraSpace(point, camera);
-                polygon.push_back(point);
+                sourcePolygon[sourceCorner - 1] = {point, vertex.u, vertex.v};
             }
             if (!valid) {
                 continue;
             }
             const bool triangleFullyInFront = std::all_of(
-                polygon.begin(), polygon.end(),
-                [nearPlane](const Vec3& point) { return point.z > nearPlane; });
-            polygon = clipAgainstNearPlane(polygon, nearPlane);
+                sourcePolygon.begin(), sourcePolygon.end(),
+                [nearPlane](const TexturedClipVertex& vertex) {
+                    return vertex.position.z > nearPlane;
+                });
+            const bool triangleHasTexCoords = meshTexture != nullptr &&
+                sourceVertices[0]->hasTexCoord &&
+                sourceVertices[1]->hasTexCoord &&
+                sourceVertices[2]->hasTexCoord;
+            const std::vector<TexturedClipVertex> polygon =
+                clipTexturedTriangleAgainstNearPlane(sourcePolygon, nearPlane);
             if (polygon.size() < 3) {
                 continue;
             }
 
             for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
-                const Vec3 points[3] = {polygon[0], polygon[i], polygon[i + 1]};
+                const TexturedClipVertex clippedVertices[3] = {
+                    polygon[0], polygon[i], polygon[i + 1]
+                };
+                const Vec3 points[3] = {
+                    clippedVertices[0].position,
+                    clippedVertices[1].position,
+                    clippedVertices[2].position
+                };
 
                 // Flat diffuse lighting from the triangle's camera-space face normal.
                 const Vec3 edgeA{
@@ -770,10 +817,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     sourceVertices[0] != nullptr && sourceVertices[0]->hasNormal &&
                     sourceVertices[1] != nullptr && sourceVertices[1]->hasNormal &&
                     sourceVertices[2] != nullptr && sourceVertices[2]->hasNormal;
-                item.hasTexCoords = triangleFullyInFront && meshTexture != nullptr &&
-                    sourceVertices[0] != nullptr && sourceVertices[0]->hasTexCoord &&
-                    sourceVertices[1] != nullptr && sourceVertices[1]->hasTexCoord &&
-                    sourceVertices[2] != nullptr && sourceVertices[2]->hasTexCoord;
+                item.hasTexCoords = triangleHasTexCoords;
                 for (std::size_t corner = 0; corner < 3; ++corner) {
                     SDL_Color vertexColor = flatColor;
                     if (hasVertexNormals) {
@@ -816,9 +860,9 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     item.colors[corner] = vertexColor;
                     item.vertices[corner] = makeVertex(points[corner], vertexColor, project);
                     item.depths[corner] = points[corner].z;
-                    if (sourceVertices[corner] != nullptr) {
-                        item.texCoords[corner] = {sourceVertices[corner]->u, sourceVertices[corner]->v};
-                    }
+                    item.texCoords[corner] = {
+                        clippedVertices[corner].u, clippedVertices[corner].v
+                    };
                 }
                 triangles.push_back(item);
                 ++renderedTriangles;
