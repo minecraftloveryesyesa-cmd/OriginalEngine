@@ -40,6 +40,12 @@ if(ORIGINALENGINE_BUILD_APP)
         include(FetchContent)
         set(SDL_TEST OFF CACHE BOOL "" FORCE)
         set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+        if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+            # iOS app bundles must not depend on an unbundled SDL dylib.
+            # Build SDL3 as a static library and link it into the executable.
+            set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+            set(SDL_STATIC ON CACHE BOOL "" FORCE)
+        endif()
         FetchContent_Declare(
             SDL3
             GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -47,7 +53,11 @@ if(ORIGINALENGINE_BUILD_APP)
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(SDL3)
-        target_link_libraries(originalengine PUBLIC SDL3::SDL3)
+        if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+            target_link_libraries(originalengine PUBLIC SDL3::SDL3-static)
+        else()
+            target_link_libraries(originalengine PUBLIC SDL3::SDL3)
+        endif()
 
         add_executable(originalengine_app src/main.cpp)
         target_link_libraries(originalengine_app PRIVATE originalengine)
