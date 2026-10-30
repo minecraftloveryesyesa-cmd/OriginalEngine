@@ -524,6 +524,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     }};
 
     const std::array<Face, 6>& faces = baseFaces;
+    std::size_t renderedTriangles = 0;
     for (const Face& face : faces) {
         std::vector<Vec3> polygon;
         polygon.reserve(face.indices.size());
@@ -559,6 +560,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 };
                 rasterizeTriangle(width, height, projected, depths, faceColors,
                                   colorBuffer_, depthBuffer_);
+                ++renderedTriangles;
             }
         }
     }
@@ -739,6 +741,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                     }
                 }
                 triangles.push_back(item);
+                ++renderedTriangles;
             }
         }
 
@@ -797,12 +800,22 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                   static_cast<double>(camera.z()));
     (void)SDL_RenderDebugText(renderer_, 12.0F, 12.0F, fpsText);
     (void)SDL_RenderDebugText(renderer_, 12.0F, 28.0F, positionText);
-    (void)SDL_RenderDebugText(renderer_, 12.0F, 44.0F,
-                              "WASD Move | Q/E Up/Down | Shift Sprint");
+    char statsText[128]{};
+    const std::size_t visibleObjects = static_cast<std::size_t>(std::count_if(
+        meshInstances.begin(), meshInstances.end(), [](const MeshInstance& instance) {
+            return instance.mesh != nullptr && instance.object != nullptr &&
+                   instance.object->visible && !instance.mesh->empty();
+        }));
+    std::snprintf(statsText, sizeof(statsText),
+                  "Triangles: %zu  Objects: %zu  Render: %dx%d",
+                  renderedTriangles, visibleObjects, width, height);
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 44.0F, statsText);
     (void)SDL_RenderDebugText(renderer_, 12.0F, 60.0F,
+                              "WASD Move | Q/E Up/Down | Shift Sprint");
+    (void)SDL_RenderDebugText(renderer_, 12.0F, 76.0F,
                               "1/2 Toggle Pyramids | F3 Wireframe | Right-click Mouse Look | Esc Exit");
     if (wireframe) {
-        (void)SDL_RenderDebugText(renderer_, 12.0F, 76.0F, "Wireframe: ON");
+        (void)SDL_RenderDebugText(renderer_, 12.0F, 92.0F, "Wireframe: ON");
     }
 
     SDL_RenderPresent(renderer_);
