@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -109,6 +110,47 @@ bool runGpuClearSmokeTest(SDL_Window* window) {
     return success;
 }
 
+bool initializeGpuBackend(SDL_Window* window, SDL_GPUDevice** outputDevice) {
+    constexpr SDL_GPUShaderFormat formats = SDL_GPU_SHADERFORMAT_SPIRV |
+        SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL;
+    SDL_GPUDevice* device = SDL_CreateGPUDevice(formats, false, nullptr);
+    if (device == nullptr) {
+        writeDiagnostic(std::string("SDL_CreateGPUDevice failed: ") + SDL_GetError());
+        return false;
+    }
+    if (!SDL_ClaimWindowForGPUDevice(device, window)) {
+        writeDiagnostic(std::string("SDL_ClaimWindowForGPUDevice failed: ") + SDL_GetError());
+        SDL_DestroyGPUDevice(device);
+        return false;
+    }
+    *outputDevice = device;
+    writeDiagnostic(std::string("GPU preview active: ") + SDL_GetGPUDeviceDriver(device));
+    return true;
+}
+
+bool renderGpuPreviewFrame(SDL_GPUDevice* device, SDL_Window* window) {
+    SDL_GPUCommandBuffer* commandBuffer = SDL_AcquireGPUCommandBuffer(device);
+    if (commandBuffer == nullptr) return false;
+    SDL_GPUTexture* texture = nullptr;
+    Uint32 width = 0, height = 0;
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, window, &texture, &width, &height)) {
+        (void)SDL_CancelGPUCommandBuffer(commandBuffer);
+        return false;
+    }
+    if (texture == nullptr || width == 0 || height == 0) {
+        return SDL_SubmitGPUCommandBuffer(commandBuffer);
+    }
+    SDL_GPUColorTargetInfo target{};
+    target.texture = texture;
+    target.clear_color = SDL_FColor{0.025F, 0.12F, 0.19F, 1.0F};
+    target.load_op = SDL_GPU_LOADOP_CLEAR;
+    target.store_op = SDL_GPU_STOREOP_STORE;
+    SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(commandBuffer, &target, 1, nullptr);
+    if (pass == nullptr) return SDL_SubmitGPUCommandBuffer(commandBuffer);
+    SDL_EndGPURenderPass(pass);
+    return SDL_SubmitGPUCommandBuffer(commandBuffer);
+}
+
 void drawTouchCircle(SDL_Renderer* renderer, float cx, float cy, float radius) {
     constexpr int segments = 32;
     for (int i = 0; i < segments; ++i) {
@@ -163,11 +205,8 @@ int main(int argc, char* argv[]) {
     writeDiagnostic("Stage: SDL_Init succeeded");
     SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE;
 #if defined(__APPLE__)
-    // SDL_GPU's Metal backend requires a Metal-capable window. SDL 3.2.10
-    // has no generic SDL_WINDOW_GPU flag; other backends do not need this.
-    if (gpuSmokeTest) {
-        windowFlags |= SDL_WINDOW_METAL;
-    }
+    // The window must be Metal-capable for runtime SDL_GPU activation.
+    windowFlags |= SDL_WINDOW_METAL;
 #endif
 
     SDL_Window* window = SDL_CreateWindow(
@@ -209,7 +248,10 @@ int main(int argc, char* argv[]) {
     int exitCode = 0;
     try {
         writeDiagnostic("Stage: creating Renderer3D");
-        originalengine::Renderer3D renderer3D(renderer);
+        auto renderer3D = std::make_unique<originalengine::Renderer3D>(renderer);
+        SDL_GPUDevice* gpuDevice = nullptr;
+        bool gpuMode = false;
+        bool backendToggleRequested = false;
         writeDiagnostic("Stage: Renderer3D created");
         originalengine::GpuDeviceProbe gpuProbe;
         std::string gpuError;
@@ -293,7 +335,9 @@ int main(int argc, char* argv[]) {
                     (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION ||
                      event.type == SDL_EVENT_FINGER_UP)) {
                     if (event.type == SDL_EVENT_FINGER_DOWN) {
-                        if (event.tfinger.x < 0.5F && !hasMovementFinger) {
+                        if (event.tfinger.x >= 0.78F && event.tfinger.y <= 0.16F) {
+                            backendToggleRequested = true;
+                        } else if (event.tfinger.x < 0.5F && !hasMovementFinger) {
                             movementFinger = event.tfinger.fingerID;
                             hasMovementFinger = true;
                             movementX = event.tfinger.x;
@@ -322,6 +366,9 @@ int main(int argc, char* argv[]) {
                     }
                 } else if (event.type == SDL_EVENT_QUIT) {
                     running = false;
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_G) {
+                    backendToggleRequested = true;
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_R) {
                     camera.reset();
@@ -380,6 +427,44 @@ int main(int argc, char* argv[]) {
                 break;
             }
 
+            if (backendToggleRequested) {
+                backendToggleRequested = false;
+                if (!gpuMode) {
+                    renderer3D.reset();
+                    SDL_DestroyRenderer(renderer);
+                    renderer = nullptr;
+                    if (initializeGpuBackend(window, &gpuDevice)) {
+                        gpuMode = true;
+                        SDL_SetWindowTitle(window, "Gasoline Engine | GPU preview | G: switch to CPU");
+                    } else {
+                        renderer = SDL_CreateRenderer(window, nullptr);
+                        if (renderer != nullptr) {
+                            renderer3D = std::make_unique<originalengine::Renderer3D>(renderer);
+                            writeDiagnostic("GPU activation failed; CPU renderer restored");
+                        } else {
+                            logSdlError("SDL_CreateRenderer after GPU activation failure");
+                            exitCode = 1;
+                        }
+                    }
+                } else {
+                    SDL_ReleaseWindowFromGPUDevice(gpuDevice, window);
+                    SDL_DestroyGPUDevice(gpuDevice);
+                    gpuDevice = nullptr;
+                    gpuMode = false;
+                    renderer = SDL_CreateRenderer(window, nullptr);
+                    if (renderer != nullptr) {
+                        (void)SDL_SetRenderVSync(renderer, 1);
+                        renderer3D = std::make_unique<originalengine::Renderer3D>(renderer);
+                        SDL_SetWindowTitle(window, "Gasoline Engine | G: switch to GPU");
+                        writeDiagnostic("CPU renderer restored");
+                    } else {
+                        logSdlError("SDL_CreateRenderer after GPU mode");
+                        exitCode = 1;
+                    }
+                }
+            }
+            if (exitCode != 0) break;
+
             const Uint64 currentTicks = SDL_GetTicks();
             const float deltaSeconds = std::min(
                 static_cast<float>(currentTicks - previousTicks) / 1000.0F, 0.1F);
@@ -410,6 +495,15 @@ int main(int argc, char* argv[]) {
                 camera.move(forward, right, vertical, deltaSeconds, fast, &collisionWorld);
             }
 
+            if (gpuMode) {
+                if (!renderGpuPreviewFrame(gpuDevice, window)) {
+                    writeDiagnostic(std::string("GPU preview frame failed: ") + SDL_GetError());
+                    exitCode = 1;
+                    break;
+                }
+                continue;
+            }
+
             int width = 0;
             int height = 0;
             if (!SDL_GetRenderOutputSize(renderer, &width, &height)) {
@@ -418,7 +512,7 @@ int main(int argc, char* argv[]) {
                 break;
             }
 
-            if (!renderer3D.render(width, height, elapsedSeconds, camera,
+            if (!renderer3D->render(width, height, elapsedSeconds, camera,
                                   meshInstances, wireframe)) {
                 writeDiagnostic("Rendering a frame failed");
                 exitCode = 1;
@@ -459,7 +553,12 @@ int main(int argc, char* argv[]) {
     }
 
     writeDiagnostic(std::string("Stage: shutting down with exit code ") + std::to_string(exitCode));
-    SDL_DestroyRenderer(renderer);
+    renderer3D.reset();
+    if (gpuDevice != nullptr) {
+        SDL_ReleaseWindowFromGPUDevice(gpuDevice, window);
+        SDL_DestroyGPUDevice(gpuDevice);
+    }
+    if (renderer != nullptr) SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
     return exitCode;
