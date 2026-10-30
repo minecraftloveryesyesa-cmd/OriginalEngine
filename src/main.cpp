@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
     if (!smokeTest) {
         SDL_SetRenderVSync(renderer, 1);
         SDL_SetWindowTitle(window,
-            "Gasoline Engine | WASD move, Q/E up/down, Shift fast | R: reset camera | Space: pause animation | F11: fullscreen | 1/2: toggle objects | F3: wireframe");
+            "Gasoline Engine | WASD move, Q/E up/down, Shift fast | R: reset camera | +/-: mouse sensitivity | Space: pause animation | F11: fullscreen | 1/2: toggle objects | F3: wireframe");
     }
 
     int exitCode = 0;
@@ -143,6 +143,12 @@ int main(int argc, char* argv[]) {
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_R) {
                     camera.reset();
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_MINUS) {
+                    camera.adjustMouseSensitivity(-0.0005F);
+                } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
+                           !event.key.repeat && event.key.key == SDLK_EQUALS) {
+                    camera.adjustMouseSensitivity(0.0005F);
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_SPACE) {
                     animationPaused = !animationPaused;
