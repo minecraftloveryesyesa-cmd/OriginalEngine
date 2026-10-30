@@ -161,11 +161,20 @@ int main(int argc, char* argv[]) {
     }
 
     writeDiagnostic("Stage: SDL_Init succeeded");
+    SDL_WindowFlags windowFlags = SDL_WINDOW_RESIZABLE;
+#if defined(__APPLE__)
+    // SDL_GPU's Metal backend requires a Metal-capable window. SDL 3.2.10
+    // has no generic SDL_WINDOW_GPU flag; other backends do not need this.
+    if (gpuSmokeTest) {
+        windowFlags |= SDL_WINDOW_METAL;
+    }
+#endif
+
     SDL_Window* window = SDL_CreateWindow(
         smokeTest ? "OriginalEngine - CI Smoke Test" : "OriginalEngine - 3D Camera Demo",
         windowWidth,
         windowHeight,
-        SDL_WINDOW_RESIZABLE | (gpuSmokeTest ? SDL_WINDOW_GPU : 0)
+        windowFlags
     );
 
     if (window == nullptr) {
