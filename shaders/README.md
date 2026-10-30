@@ -1,6 +1,6 @@
 # SDL GPU shader sources
 
-This directory contains the shared HLSL shader pair intended for the SDL GPU backend.
+The GPU shader sources are kept in backend-specific formats.
 
 ## Vertex input
 
@@ -8,19 +8,16 @@ This directory contains the shared HLSL shader pair intended for the SDL GPU bac
 - Attribute 1: RGB color, three 32-bit floats.
 - Vertex shader uniform slot 0: a 4x4 view-projection matrix.
 
-The vertex shader transforms each position with the supplied view-projection matrix. The fragment shader clamps interpolated RGB values to the valid 0–1 range and writes an opaque color.
+## Metal (iOS)
 
-## Compile
+`shaders/Metal` contains native Metal Shading Language source files for SDL_GPU's Metal backend. They are packaged into the iOS app bundle under `Resources/shaders`. The vertex shader expects the two vertex attributes above and a view-projection matrix at buffer slot 0.
 
-Install SDL_shadercross and make sure `shadercross` is on PATH.
+SDL_GPU accepts MSL directly on Metal, so this path does not require SDL_shadercross at runtime. The files are source resources; they are not compiled into a metallib by this CMake configuration.
 
-- macOS / Linux: run `sh shaders/compile.sh` from the repository root.
-- Windows: run the equivalent `shadercross source -o output` commands in PowerShell for each source and target format.
+## HLSL
 
-The script compiles every `.vert.hlsl` and `.frag.hlsl` source into SPIR-V, MSL, and DXIL files under `shaders/Compiled`. Generated binaries are build artifacts and are not currently bundled into the application.
+`shaders/Source` retains the HLSL pair for shadercross-based SPIR-V/DXIL workflows on other backends. The existing `shaders/compile.sh` script requires an installed `shadercross` executable.
 
-## Current integration status
+## Integration status
 
-The application still uses its CPU renderer for the 3D scene. The runtime GPU mode currently acquires the swapchain and clears it to a solid color; it does not yet load these shaders, create a graphics pipeline, upload mesh buffers, or draw the scene.
-
-The next integration step is to compile/package these shaders for the active SDL_GPU backend, then create the graphics pipeline and upload the scene's mesh data. Depth testing and texture sampling are not yet integrated.
+This change adds the native MSL shader sources and bundles them with iOS builds. The runtime GPU preview still only clears the swapchain: shader loading, graphics pipeline creation, vertex/index buffer upload, depth testing, and scene drawing remain to be implemented.
