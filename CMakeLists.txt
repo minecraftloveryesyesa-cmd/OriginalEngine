@@ -78,9 +78,16 @@ if(ORIGINALENGINE_BUILD_APP)
                 assets/demo_texture.ppm
                 PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets"
             )
+            set_source_files_properties(
+                shaders/Metal/Basic3D.vert.metal
+                shaders/Metal/Basic3D.frag.metal
+                PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/shaders"
+            )
             target_sources(originalengine_app PRIVATE
                 assets/demo.obj
                 assets/demo_texture.ppm
+                shaders/Metal/Basic3D.vert.metal
+                shaders/Metal/Basic3D.frag.metal
             )
         else()
             add_custom_command(TARGET originalengine_app POST_BUILD
