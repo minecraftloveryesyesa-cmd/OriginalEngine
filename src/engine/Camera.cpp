@@ -6,7 +6,8 @@
 
 namespace originalengine {
 namespace {
-constexpr float kMouseSensitivity = 0.0025F;
+constexpr float kMinimumMouseSensitivity = 0.0005F;
+constexpr float kMaximumMouseSensitivity = 0.01F;
 constexpr float kPi = 3.14159265358979323846F;
 constexpr float kWalkSpeed = 4.0F;
 constexpr float kFastSpeed = 10.0F;
@@ -20,9 +21,15 @@ void Camera::reset() noexcept {
     pitch_ = 0.0F;
 }
 
+void Camera::adjustMouseSensitivity(float delta) noexcept {
+    mouseSensitivity_ = std::clamp(mouseSensitivity_ + delta,
+                                   kMinimumMouseSensitivity,
+                                   kMaximumMouseSensitivity);
+}
+
 void Camera::rotate(float mouseDeltaX, float mouseDeltaY) {
-    yaw_ += mouseDeltaX * kMouseSensitivity;
-    pitch_ -= mouseDeltaY * kMouseSensitivity;
+    yaw_ += mouseDeltaX * mouseSensitivity_;
+    pitch_ -= mouseDeltaY * mouseSensitivity_;
     pitch_ = std::clamp(pitch_, -kPi * 0.49F, kPi * 0.49F);
 }
 
