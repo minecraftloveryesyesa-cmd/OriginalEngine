@@ -41,8 +41,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  ios-simulator:
-    name: iOS Simulator / Xcode
+  ios-unsigned-ipa:
+    name: iOS Device / Unsigned IPA
     runs-on: macos-15
     steps:
       - name: Check out repository
@@ -51,23 +51,40 @@ jobs:
       - name: Set up CMake
         uses: lukka/get-cmake@latest
 
-      - name: Configure iOS Simulator
+      - name: Configure iOS Device
         run: >-
           cmake -S . -B build-ios -G Xcode
           -DCMAKE_SYSTEM_NAME=iOS
-          -DCMAKE_OSX_SYSROOT=iphonesimulator
+          -DCMAKE_OSX_SYSROOT=iphoneos
           -DCMAKE_OSX_ARCHITECTURES=arm64
           -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
           -DORIGINALENGINE_BUILD_APP=ON
           -DBUILD_TESTING=OFF
 
-      - name: Build iOS Simulator app
-        run: cmake --build build-ios --config Release --parallel
+      - name: Build unsigned iOS app
+        run: >-
+          cmake --build build-ios --config Release --parallel
+          -- -sdk iphoneos
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGNING_IDENTITY=""
 
-      - name: Upload iOS Simulator app
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p ipa/Payload
+          cp -R build-ios/Release-iphoneos/originalengine_app.app ipa/Payload/
+          /usr/bin/zip -qry GasolineEngine-iOS-unsigned.ipa Payload
+        working-directory: ipa
+
+      - name: Verify IPA
+        run: |
+          test -s GasolineEngine-iOS-unsigned.ipa
+          /usr/bin/unzip -l GasolineEngine-iOS-unsigned.ipa
+
+      - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: GasolineEngine-iOS-Simulator
-          path: build-ios/Release-iphonesimulator/originalengine_app.app
+          name: GasolineEngine-iOS-unsigned-IPA
+          path: ipa/GasolineEngine-iOS-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
