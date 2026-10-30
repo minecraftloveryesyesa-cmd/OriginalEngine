@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(OriginalEngine
+project(GasolineEngine
     VERSION 0.1.0
-    DESCRIPTION "A cross-platform 3D game engine"
+    DESCRIPTION "Gasoline Engine - a cross-platform 3D game engine"
     LANGUAGES CXX
 )
 
