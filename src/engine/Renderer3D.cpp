@@ -525,6 +525,7 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
 
     const std::array<Face, 6>& faces = baseFaces;
     std::size_t renderedTriangles = 0;
+    std::size_t culledTriangles = 0;
     for (const Face& face : faces) {
         std::vector<Vec3> polygon;
         polygon.reserve(face.indices.size());
@@ -658,6 +659,24 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                 };
                 const float normalLength = std::sqrt(
                     normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+
+                // Back-face culling: the outward face normal must point toward
+                // the camera. Keep wireframe double-sided for debugging.
+                if (!wireframe && normalLength > 1.0e-6F) {
+                    const Vec3 toCamera{
+                        -(points[0].x + points[1].x + points[2].x) / 3.0F,
+                        -(points[0].y + points[1].y + points[2].y) / 3.0F,
+                        -(points[0].z + points[1].z + points[2].z) / 3.0F
+                    };
+                    const float facing = normal.x * toCamera.x +
+                                         normal.y * toCamera.y +
+                                         normal.z * toCamera.z;
+                    if (facing <= 0.0F) {
+                        ++culledTriangles;
+                        continue;
+                    }
+                }
+
                 if (normalLength > 1.0e-6F) {
                     normal.x /= normalLength;
                     normal.y /= normalLength;
@@ -807,8 +826,8 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
                    instance.object->visible && !instance.mesh->empty();
         }));
     std::snprintf(statsText, sizeof(statsText),
-                  "Triangles: %zu  Objects: %zu  Render: %dx%d",
-                  renderedTriangles, visibleObjects, width, height);
+                  "Triangles: %zu  Culled: %zu  Objects: %zu  Render: %dx%d",
+                  renderedTriangles, culledTriangles, visibleObjects, width, height);
     (void)SDL_RenderDebugText(renderer_, 12.0F, 44.0F, statsText);
     (void)SDL_RenderDebugText(renderer_, 12.0F, 60.0F,
                               "WASD Move | Q/E Up/Down | Shift Sprint");
