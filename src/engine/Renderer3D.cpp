@@ -633,14 +633,13 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         }
 
         if (wireframe) {
-            SDL_SetRenderDrawColor(renderer_, 220, 232, 250, 255);
+            const SDL_Color wireColor{220, 232, 250, 255};
             for (std::size_t i = 0; i < polygon.size(); ++i) {
-                const SDL_FPoint a = project(polygon[i]);
-                const SDL_FPoint b = project(polygon[(i + 1) % polygon.size()]);
-                if (!SDL_RenderLine(renderer_, a.x, a.y, b.x, b.y)) {
-                    SDL_Log("SDL_RenderLine for wireframe cube failed: %s", SDL_GetError());
-                    return false;
-                }
+                const Vec3& pointA = polygon[i];
+                const Vec3& pointB = polygon[(i + 1) % polygon.size()];
+                rasterizeDepthLine(width, height, project(pointA), pointA.z,
+                                   project(pointB), pointB.z, wireColor,
+                                   colorBuffer_, depthBuffer_);
             }
         } else {
             for (std::size_t i = 1; i + 1 < polygon.size(); ++i) {
