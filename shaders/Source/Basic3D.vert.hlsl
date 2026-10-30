@@ -1,3 +1,8 @@
+cbuffer CameraConstants : register(b0)
+{
+    float4x4 ViewProjection;
+};
+
 struct VertexInput
 {
     float3 Position : TEXCOORD0;
@@ -13,7 +18,7 @@ struct VertexOutput
 VertexOutput main(VertexInput input)
 {
     VertexOutput output;
-    output.Position = float4(input.Position, 1.0f);
+    output.Position = mul(float4(input.Position, 1.0f), ViewProjection);
     output.Color = input.Color;
     return output;
 }
