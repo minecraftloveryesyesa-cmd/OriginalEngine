@@ -11,14 +11,37 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
+#include <string>
 #include <string_view>
 #include <vector>
 
 namespace {
 
+std::string diagnosticLogPath;
+
+void writeDiagnostic(const std::string& message) {
+    std::cerr << "[OriginalEngine] " << message << '\n';
+    if (!diagnosticLogPath.empty()) {
+        std::ofstream log(diagnosticLogPath, std::ios::app);
+        if (log) log << message << '\n';
+    }
+}
+
+void initializeDiagnosticLog() {
+    char* prefPath = SDL_GetPrefPath("com.gasolineengine", "GasolineEngine");
+    if (prefPath != nullptr) {
+        diagnosticLogPath = std::string(prefPath) + "startup.log";
+        SDL_free(prefPath);
+        std::ofstream log(diagnosticLogPath, std::ios::trunc);
+        if (log) log << "Gasoline Engine startup diagnostics\n";
+    }
+}
+
 void logSdlError(const char* operation) {
-    std::cerr << "[OriginalEngine] " << operation << " failed: "
-              << SDL_GetError() << '\n';
+    writeDiagnostic(std::string(operation) + " failed: " + SDL_GetError());
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Gasoline Engine startup error",
+        (std::string(operation) + " failed. Details saved to startup.log.").c_str(), nullptr);
 }
 
 void drawTouchCircle(SDL_Renderer* renderer, float cx, float cy, float radius) {
@@ -60,14 +83,18 @@ std::filesystem::path resolveAssetPath(const char* relativePath) {
 
 int main(int argc, char* argv[]) {
     const bool smokeTest = argc > 1 && std::string_view(argv[1]) == "--smoke-test";
+    initializeDiagnosticLog();
+    writeDiagnostic("Stage: entering main");
     constexpr int windowWidth = 1280;
     constexpr int windowHeight = 720;
 
+    writeDiagnostic("Stage: SDL_Init");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         logSdlError("SDL_Init");
         return 1;
     }
 
+    writeDiagnostic("Stage: SDL_Init succeeded");
     SDL_Window* window = SDL_CreateWindow(
         smokeTest ? "OriginalEngine - CI Smoke Test" : "OriginalEngine - 3D Camera Demo",
         windowWidth,
@@ -81,6 +108,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    writeDiagnostic("Stage: SDL_CreateWindow succeeded");
     SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (renderer == nullptr) {
         logSdlError("SDL_CreateRenderer");
@@ -89,6 +117,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    writeDiagnostic("Stage: SDL_CreateRenderer succeeded");
     if (!smokeTest) {
         SDL_SetRenderVSync(renderer, 1);
         SDL_SetWindowTitle(window,
@@ -97,18 +126,21 @@ int main(int argc, char* argv[]) {
 
     int exitCode = 0;
     try {
+        writeDiagnostic("Stage: creating Renderer3D");
         originalengine::Renderer3D renderer3D(renderer);
+        writeDiagnostic("Stage: Renderer3D created");
         originalengine::Camera camera;
         originalengine::CollisionWorld collisionWorld;
         originalengine::Mesh demoMesh;
         std::string meshError;
         const std::filesystem::path meshPath = resolveAssetPath("assets/demo.obj");
         const std::filesystem::path texturePath = resolveAssetPath("assets/demo_texture.ppm");
+        writeDiagnostic("Stage: loading OBJ: " + meshPath.string());
         if (!originalengine::ObjMeshLoader::loadFromFile(meshPath.string(), demoMesh, &meshError)) {
-            std::cerr << "[OriginalEngine] Could not load mesh '" << meshPath.string() << "': "
-                      << meshError << '\n';
+            writeDiagnostic("Could not load mesh " + meshPath.string() + ": " + meshError);
             exitCode = 1;
         }
+        writeDiagnostic("Stage: OBJ load completed");
         originalengine::Scene scene;
         originalengine::Transform demoTransform;
         demoTransform.position = {2.6F, -0.2F, 7.0F};
@@ -155,6 +187,7 @@ int main(int argc, char* argv[]) {
         Uint64 previousTicks = SDL_GetTicks();
         double elapsedSeconds = 0.0;
 
+        writeDiagnostic("Stage: entering main loop");
         while (running && exitCode == 0) {
             int touchWidth = 0;
             int touchHeight = 0;
@@ -292,7 +325,7 @@ int main(int argc, char* argv[]) {
 
             if (!renderer3D.render(width, height, elapsedSeconds, camera,
                                   meshInstances, wireframe)) {
-                std::cerr << "[OriginalEngine] Rendering a frame failed.\n";
+                writeDiagnostic("Rendering a frame failed");
                 exitCode = 1;
                 break;
             }
@@ -319,16 +352,16 @@ int main(int argc, char* argv[]) {
             }
 
             if (smokeTest) {
-                std::cout << "[OriginalEngine] Smoke test passed: SDL initialized, "
-                             "window and renderer created, and one frame rendered.\n";
+                writeDiagnostic("Smoke test passed: one frame rendered");
                 running = false;
             }
         }
     } catch (const std::exception& error) {
-        std::cerr << "[OriginalEngine] " << error.what() << '\n';
+        writeDiagnostic(std::string("Exception: ") + error.what());
         exitCode = 1;
     }
 
+    writeDiagnostic(std::string("Stage: shutting down with exit code ") + std::to_string(exitCode));
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
