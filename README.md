@@ -1,4 +1,4 @@
-# OriginalEngine
+# Gasoline Engine
 
 A cross-platform game-engine project, starting with a C++20 foundation.
 
@@ -69,7 +69,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 1. Open the repository's Actions tab.
 2. Select the Build workflow and choose Run workflow, or push a commit to main.
-3. Open the completed run and download the OriginalEngine-Windows-x64 artifact.
+3. Open the completed run and download the Gasoline Engine-Windows-x64 artifact.
 4. Extract the ZIP and run originalengine_app.exe on a compatible Windows PC.
 
 GitHub Actions can compile the Windows app and run automated tests, but it cannot show the interactive window inside the build log. You need a Windows device to run and visually inspect the executable.
@@ -99,7 +99,7 @@ tests/                Automated camera, collision, and scene tests
 
 # 日本語
 
-OriginalEngine は、C++20 を基盤として開発しているクロスプラットフォーム向けゲームエンジンのプロジェクトです。
+Gasoline Engine は、C++20 を基盤として開発しているクロスプラットフォーム向けゲームエンジンのプロジェクトです。
 
 ## 現在の機能
 
@@ -168,7 +168,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 1. GitHub リポジトリの **Actions** タブを開きます。
 2. **Build** ワークフローを選び、**Run workflow** を実行するか、`main` ブランチにコミットを push します。
-3. ワークフローの実行が完了したら、成果物 `OriginalEngine-Windows-x64` をダウンロードします。
+3. ワークフローの実行が完了したら、成果物 `Gasoline Engine-Windows-x64` をダウンロードします。
 4. ZIP を展開し、対応する Windows PC で `originalengine_app.exe` を実行します。
 
 GitHub Actions は Windows アプリのビルドと自動テストを実行できますが、ビルドログ内に操作可能なゲームウィンドウを表示することはできません。実際の見た目を確認するには、Windows 端末で実行する必要があります。
