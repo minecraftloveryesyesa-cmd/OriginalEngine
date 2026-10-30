@@ -1,6 +1,7 @@
 #include "engine/Camera.hpp"
 #include "engine/CollisionWorld.hpp"
 #include "engine/Renderer3D.hpp"
+#include "engine/GpuDeviceProbe.hpp"
 #include "engine/ObjMeshLoader.hpp"
 #include "engine/Scene.hpp"
 
@@ -130,6 +131,15 @@ int main(int argc, char* argv[]) {
         writeDiagnostic("Stage: creating Renderer3D");
         originalengine::Renderer3D renderer3D(renderer);
         writeDiagnostic("Stage: Renderer3D created");
+        originalengine::GpuDeviceProbe gpuProbe;
+        std::string gpuError;
+        if (gpuProbe.initialize(&gpuError)) {
+            writeDiagnostic("SDL_GPU available: driver=" + gpuProbe.driverName() +
+                ", shaderFormats=" + std::to_string(
+                    static_cast<unsigned int>(gpuProbe.shaderFormats())));
+        } else {
+            writeDiagnostic("SDL_GPU unavailable; CPU renderer remains active: " + gpuError);
+        }
         originalengine::Camera camera;
         originalengine::CollisionWorld collisionWorld;
         originalengine::Mesh demoMesh;
