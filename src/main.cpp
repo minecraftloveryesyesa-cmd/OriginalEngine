@@ -15,12 +15,6 @@
 
 namespace {
 
-struct SdlFreeDeleter {
-    void operator()(char* pointer) const noexcept {
-        SDL_free(pointer);
-    }
-};
-
 void logSdlError(const char* operation) {
     std::cerr << "[OriginalEngine] " << operation << " failed: "
               << SDL_GetError() << '\n';
@@ -29,7 +23,7 @@ void logSdlError(const char* operation) {
 std::filesystem::path resolveAssetPath(const char* relativePath) {
     const std::filesystem::path relative(relativePath);
     // SDL_GetBasePath returns SDL-managed memory; release it on every return path.
-    std::unique_ptr<char, SdlFreeDeleter> basePath(SDL_GetBasePath());
+    const char* basePath = SDL_GetBasePath();
     if (basePath != nullptr) {
         const std::filesystem::path executablePath(basePath);
         const std::filesystem::path besideExecutable = executablePath / relative;
@@ -146,7 +140,7 @@ int main(int argc, char* argv[]) {
                 if (event.type == SDL_EVENT_QUIT) {
                     running = false;
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
-                           !event.key.repeat && event.key.key == SDLK_r) {
+                           !event.key.repeat && event.key.key == SDLK_R) {
                     camera.reset();
                 } else if (!smokeTest && event.type == SDL_EVENT_KEY_DOWN &&
                            !event.key.repeat && event.key.key == SDLK_SPACE) {
