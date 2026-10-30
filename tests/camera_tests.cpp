@@ -46,6 +46,14 @@ int main() {
         return 1;
     }
 
+    camera.reset();
+    if (!nearlyEqual(camera.x(), 0.0F) || !nearlyEqual(camera.y(), 0.0F) ||
+        !nearlyEqual(camera.z(), 0.0F) || !nearlyEqual(camera.yaw(), 0.0F) ||
+        !nearlyEqual(camera.pitch(), 0.0F)) {
+        std::cerr << "Camera reset failed.\\n";
+        return 1;
+    }
+
     std::cout << "Camera tests passed.\n";
     return 0;
 }
