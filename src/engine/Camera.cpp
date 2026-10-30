@@ -12,6 +12,14 @@ constexpr float kWalkSpeed = 4.0F;
 constexpr float kFastSpeed = 10.0F;
 }
 
+void Camera::reset() noexcept {
+    x_ = 0.0F;
+    y_ = 0.0F;
+    z_ = 0.0F;
+    yaw_ = 0.0F;
+    pitch_ = 0.0F;
+}
+
 void Camera::rotate(float mouseDeltaX, float mouseDeltaY) {
     yaw_ += mouseDeltaX * kMouseSensitivity;
     pitch_ -= mouseDeltaY * kMouseSensitivity;
