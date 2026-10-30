@@ -10,6 +10,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -22,9 +23,10 @@ void logSdlError(const char* operation) {
 
 std::filesystem::path resolveAssetPath(const char* relativePath) {
     const std::filesystem::path relative(relativePath);
-    const char* basePath = SDL_GetBasePath();
+    // SDL_GetBasePath returns SDL-managed memory; release it on every return path.
+    std::unique_ptr<char, decltype(&SDL_free)> basePath(SDL_GetBasePath(), SDL_free);
     if (basePath != nullptr) {
-        const std::filesystem::path executablePath(basePath);
+        const std::filesystem::path executablePath(basePath.get());
         const std::filesystem::path besideExecutable = executablePath / relative;
         std::error_code error;
         if (std::filesystem::is_regular_file(besideExecutable, error)) {
@@ -38,7 +40,7 @@ std::filesystem::path resolveAssetPath(const char* relativePath) {
     }
     std::filesystem::path fallback = relative;
     if (basePath != nullptr) {
-        fallback = std::filesystem::path(basePath) / relative;
+        fallback = std::filesystem::path(basePath.get()) / relative;
     }
     return fallback;
 }
