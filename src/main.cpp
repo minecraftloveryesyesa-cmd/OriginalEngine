@@ -137,6 +137,10 @@ int main(int argc, char* argv[]) {
             writeDiagnostic("SDL_GPU available: driver=" + gpuProbe.driverName() +
                 ", shaderFormats=" + std::to_string(
                     static_cast<unsigned int>(gpuProbe.shaderFormats())));
+            // This is only a capability probe. Release the unclaimed GPU device
+            // immediately so it does not reserve GPU resources while SDL_Renderer
+            // continues to own and present the window.
+            gpuProbe.shutdown();
         } else {
             writeDiagnostic("SDL_GPU unavailable; CPU renderer remains active: " + gpuError);
         }
