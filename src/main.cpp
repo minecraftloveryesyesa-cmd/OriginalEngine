@@ -10,7 +10,6 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
-#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -32,7 +31,7 @@ std::filesystem::path resolveAssetPath(const char* relativePath) {
     // SDL_GetBasePath returns SDL-managed memory; release it on every return path.
     std::unique_ptr<char, SdlFreeDeleter> basePath(SDL_GetBasePath());
     if (basePath != nullptr) {
-        const std::filesystem::path executablePath(basePath.get());
+        const std::filesystem::path executablePath(basePath);
         const std::filesystem::path besideExecutable = executablePath / relative;
         std::error_code error;
         if (std::filesystem::is_regular_file(besideExecutable, error)) {
@@ -46,7 +45,7 @@ std::filesystem::path resolveAssetPath(const char* relativePath) {
     }
     std::filesystem::path fallback = relative;
     if (basePath != nullptr) {
-        fallback = std::filesystem::path(basePath.get()) / relative;
+        fallback = std::filesystem::path(basePath) / relative;
     }
     return fallback;
 }
