@@ -84,7 +84,7 @@ jobs:
         run: >-
           cmake --build build-ios --config Release --parallel
           -- -sdk iphoneos
-          -derivedDataPath build-ios/DerivedData
+          -derivedDataPath "${{ github.workspace }}/build-ios/DerivedData"
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
           CODE_SIGNING_IDENTITY=""
