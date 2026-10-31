@@ -71,6 +71,86 @@ fragment float4 main_fragment(VertexOutput input [[stage_in]])
 }
 )metal";
 
+
+struct OverlayConstants {
+    float center[2];
+    float radius[2];
+    float color[4];
+    float viewport[2];
+    Uint32 shape;
+    Uint32 padding;
+};
+
+constexpr char overlayVertexSource[] = R"metal(
+#include <metal_stdlib>
+using namespace metal;
+
+struct OverlayConstants {
+    float2 center;
+    float2 radius;
+    float4 color;
+    float2 viewport;
+    uint shape;
+    uint padding;
+};
+struct OverlayOutput {
+    float4 position [[position]];
+    float4 color;
+};
+vertex OverlayOutput overlay_vertex(
+    uint vertexId [[vertex_id]],
+    constant OverlayConstants& constants [[buffer(0)]])
+{
+    OverlayOutput output;
+    float2 local;
+    if (constants.shape == 0) {
+        const uint segment = vertexId / 6;
+        const uint corner = vertexId % 6;
+        const float angles[4] = {
+            float(segment) / 32.0 * 6.28318530718,
+            float(segment) / 32.0 * 6.28318530718,
+            float(segment + 1) / 32.0 * 6.28318530718,
+            float(segment) / 32.0 * 6.28318530718
+        };
+        const float angle0 = angles[0];
+        const float angle1 = angles[2];
+        const float2 outer0 = float2(cos(angle0), sin(angle0));
+        const float2 inner0 = outer0 * 0.82;
+        const float2 outer1 = float2(cos(angle1), sin(angle1));
+        const float2 inner1 = outer1 * 0.82;
+        if (corner == 0 || corner == 3) local = outer0;
+        else if (corner == 1) local = inner0;
+        else if (corner == 2 || corner == 4) local = inner1;
+        else local = outer1;
+    } else {
+        const float2 quad[6] = {
+            float2(-1.0, -1.0), float2(1.0, -1.0), float2(1.0, 1.0),
+            float2(-1.0, -1.0), float2(1.0, 1.0), float2(-1.0, 1.0)
+        };
+        local = quad[vertexId];
+    }
+    const float2 pixel = constants.center + local * constants.radius;
+    output.position = float4(
+        pixel.x / constants.viewport.x * 2.0 - 1.0,
+        1.0 - pixel.y / constants.viewport.y * 2.0, 0.0, 1.0);
+    output.color = constants.color;
+    return output;
+}
+)metal";
+
+constexpr char overlayFragmentSource[] = R"metal(
+#include <metal_stdlib>
+using namespace metal;
+struct OverlayOutput {
+    float4 position [[position]];
+    float4 color;
+};
+fragment float4 overlay_fragment(OverlayOutput input [[stage_in]])
+{
+    return input.color;
+}
+)metal";
+
 Matrix4 identityMatrix() {
     Matrix4 result{};
     result[0] = 1.0F;
@@ -466,6 +546,59 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
         shutdown();
         return false;
     }
+
+    SDL_GPUShaderCreateInfo overlayVertexInfo{};
+    overlayVertexInfo.code_size = std::strlen(overlayVertexSource);
+    overlayVertexInfo.code = reinterpret_cast<const Uint8*>(overlayVertexSource);
+    overlayVertexInfo.entrypoint = "overlay_vertex";
+    overlayVertexInfo.format = SDL_GPU_SHADERFORMAT_MSL;
+    overlayVertexInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
+    overlayVertexInfo.num_uniform_buffers = 1;
+    SDL_GPUShader* overlayVertexShader = SDL_CreateGPUShader(device_, &overlayVertexInfo);
+    if (overlayVertexShader == nullptr) {
+        setError("SDL_CreateGPUShader(overlay vertex)");
+        shutdown();
+        return false;
+    }
+
+    SDL_GPUShaderCreateInfo overlayFragmentInfo{};
+    overlayFragmentInfo.code_size = std::strlen(overlayFragmentSource);
+    overlayFragmentInfo.code = reinterpret_cast<const Uint8*>(overlayFragmentSource);
+    overlayFragmentInfo.entrypoint = "overlay_fragment";
+    overlayFragmentInfo.format = SDL_GPU_SHADERFORMAT_MSL;
+    overlayFragmentInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+    SDL_GPUShader* overlayFragmentShader = SDL_CreateGPUShader(device_, &overlayFragmentInfo);
+    if (overlayFragmentShader == nullptr) {
+        setError("SDL_CreateGPUShader(overlay fragment)");
+        SDL_ReleaseGPUShader(device_, overlayVertexShader);
+        shutdown();
+        return false;
+    }
+
+    SDL_GPUColorTargetDescription overlayColorTarget{};
+    overlayColorTarget.format = SDL_GetGPUSwapchainTextureFormat(device_, window_);
+    SDL_GPUGraphicsPipelineCreateInfo overlayPipelineInfo{};
+    overlayPipelineInfo.vertex_shader = overlayVertexShader;
+    overlayPipelineInfo.fragment_shader = overlayFragmentShader;
+    overlayPipelineInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    overlayPipelineInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    overlayPipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+    overlayPipelineInfo.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    overlayPipelineInfo.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    overlayPipelineInfo.depth_stencil_state.enable_depth_test = false;
+    overlayPipelineInfo.depth_stencil_state.enable_depth_write = false;
+    overlayPipelineInfo.target_info.color_target_descriptions = &overlayColorTarget;
+    overlayPipelineInfo.target_info.num_color_targets = 1;
+    overlayPipelineInfo.target_info.has_depth_stencil_target = true;
+    overlayPipelineInfo.target_info.depth_stencil_format = depthFormat_;
+    overlayPipeline_ = SDL_CreateGPUGraphicsPipeline(device_, &overlayPipelineInfo);
+    SDL_ReleaseGPUShader(device_, overlayFragmentShader);
+    SDL_ReleaseGPUShader(device_, overlayVertexShader);
+    if (overlayPipeline_ == nullptr) {
+        setError("SDL_CreateGPUGraphicsPipeline(overlay)");
+        shutdown();
+        return false;
+    }
     return true;
 }
 
@@ -500,7 +633,8 @@ bool GpuRenderer::createDepthTexture(Uint32 width, Uint32 height) {
 }
 
 bool GpuRenderer::renderFrame(
-    const Camera& camera, const std::vector<const SceneObject*>& objects) {
+    const Camera& camera, const std::vector<const SceneObject*>& objects,
+    bool showTouchControls, bool movementActive, float movementX, float movementY) {
     if (device_ == nullptr || window_ == nullptr || pipeline_ == nullptr ||
         vertexBuffer_ == nullptr || indexBuffer_ == nullptr) {
         lastError_ = "GPU renderer is not initialized";
@@ -577,12 +711,119 @@ bool GpuRenderer::renderFrame(
         SDL_DrawGPUIndexedPrimitives(pass, indexCount_, 1, 0, 0, 0);
     }
 
+    if (showTouchControls && overlayPipeline_ != nullptr) {
+        drawOverlay(commandBuffer, pass, width, height, movementActive, movementX, movementY);
+    }
+
     SDL_EndGPURenderPass(pass);
     if (!SDL_SubmitGPUCommandBuffer(commandBuffer)) {
         setError("SDL_SubmitGPUCommandBuffer");
         return false;
     }
     return true;
+}
+
+
+void GpuRenderer::drawOverlayRect(
+    SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
+    float x, float y, float rectWidth, float rectHeight,
+    Uint32 viewportWidth, Uint32 viewportHeight, const float color[4]) {
+    OverlayConstants constants{};
+    constants.center[0] = x + rectWidth * 0.5F;
+    constants.center[1] = y + rectHeight * 0.5F;
+    constants.radius[0] = rectWidth * 0.5F;
+    constants.radius[1] = rectHeight * 0.5F;
+    std::copy_n(color, 4, constants.color);
+    constants.viewport[0] = static_cast<float>(viewportWidth);
+    constants.viewport[1] = static_cast<float>(viewportHeight);
+    constants.shape = 1;
+    SDL_PushGPUVertexUniformData(commandBuffer, 0, &constants,
+                                 static_cast<Uint32>(sizeof(constants)));
+    SDL_DrawGPUPrimitives(pass, 6, 1, 0, 0);
+}
+
+void GpuRenderer::drawOverlayCircle(
+    SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
+    float x, float y, float radiusX, float radiusY,
+    Uint32 viewportWidth, Uint32 viewportHeight, const float color[4]) {
+    OverlayConstants constants{};
+    constants.center[0] = x;
+    constants.center[1] = y;
+    constants.radius[0] = radiusX;
+    constants.radius[1] = radiusY;
+    std::copy_n(color, 4, constants.color);
+    constants.viewport[0] = static_cast<float>(viewportWidth);
+    constants.viewport[1] = static_cast<float>(viewportHeight);
+    constants.shape = 0;
+    SDL_PushGPUVertexUniformData(commandBuffer, 0, &constants,
+                                 static_cast<Uint32>(sizeof(constants)));
+    SDL_DrawGPUPrimitives(pass, 32U * 6U, 1, 0, 0);
+}
+
+void GpuRenderer::drawOverlay(
+    SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
+    Uint32 width, Uint32 height, bool movementActive, float movementX, float movementY) {
+    SDL_BindGPUGraphicsPipeline(pass, overlayPipeline_);
+    const float dimension = static_cast<float>(std::min(width, height));
+    const float joystickX = static_cast<float>(width) * 0.20F;
+    const float joystickY = static_cast<float>(height) * 0.78F;
+    const float joystickRadius = dimension * 0.14F;
+    const float ringColor[4]{0.82F, 0.88F, 0.96F, 1.0F};
+    const float knobColor[4]{0.40F, 0.68F, 0.94F, 1.0F};
+    const float buttonColor[4]{0.11F, 0.44F, 0.63F, 1.0F};
+    const float textColor[4]{0.96F, 0.98F, 1.0F, 1.0F};
+
+    drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
+                      joystickRadius, joystickRadius, width, height, ringColor);
+    drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
+                      joystickRadius * 0.38F, joystickRadius * 0.38F,
+                      width, height, ringColor);
+    if (movementActive) {
+        const float knobX = joystickX + std::clamp(
+            movementX * static_cast<float>(width) - joystickX,
+            -joystickRadius, joystickRadius);
+        const float knobY = joystickY + std::clamp(
+            movementY * static_cast<float>(height) - joystickY,
+            -joystickRadius, joystickRadius);
+        drawOverlayCircle(commandBuffer, pass, knobX, knobY,
+                          joystickRadius * 0.25F, joystickRadius * 0.25F,
+                          width, height, knobColor);
+    }
+    drawOverlayCircle(commandBuffer, pass, static_cast<float>(width) * 0.82F,
+                      static_cast<float>(height) * 0.78F,
+                      dimension * 0.12F, dimension * 0.12F,
+                      width, height, ringColor);
+
+    const float buttonX = static_cast<float>(width) - 116.0F;
+    drawOverlayRect(commandBuffer, pass, buttonX, 18.0F, 98.0F, 42.0F,
+                    width, height, buttonColor);
+
+    // Tiny 3x5 bitmap font keeps the backend-switch label available without
+    // depending on SDL_Renderer or a separate font subsystem.
+    const char* glyphs[3] = {"111/101/110/101/111", "101/101/101/101/111",
+                             "110/101/110/100/100"};
+    const float textWidth = 3.0F * 3.0F + 2.0F * 2.0F;
+    const float textStartX = buttonX + (98.0F - textWidth) * 0.5F;
+    const float textStartY = 31.0F;
+    for (int letter = 0; letter < 3; ++letter) {
+        int row = 0;
+        int column = 0;
+        for (const char* cursor = glyphs[letter]; *cursor != '\0'; ++cursor) {
+            if (*cursor == '/') {
+                ++row;
+                column = 0;
+            } else {
+                if (*cursor == '1') {
+                    drawOverlayRect(commandBuffer, pass,
+                        textStartX + static_cast<float>(letter) * 13.0F +
+                            static_cast<float>(column) * 3.0F,
+                        textStartY + static_cast<float>(row) * 2.0F,
+                        2.0F, 1.6F, width, height, textColor);
+                }
+                ++column;
+            }
+        }
+    }
 }
 
 void GpuRenderer::shutdown() noexcept {
@@ -593,6 +834,10 @@ void GpuRenderer::shutdown() noexcept {
         }
         depthWidth_ = 0;
         depthHeight_ = 0;
+        if (overlayPipeline_ != nullptr) {
+            SDL_ReleaseGPUGraphicsPipeline(device_, overlayPipeline_);
+            overlayPipeline_ = nullptr;
+        }
         if (pipeline_ != nullptr) {
             SDL_ReleaseGPUGraphicsPipeline(device_, pipeline_);
             pipeline_ = nullptr;
