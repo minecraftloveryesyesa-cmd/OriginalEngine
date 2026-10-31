@@ -441,3 +441,15 @@ CI:
 - The current GPU output is **still the original hard-coded triangle preview**. This commit is an architecture/refactoring milestone, not yet OBJ/scene GPU rendering.
 - The GPU backend currently requests MSL because its embedded shaders are MSL. Cross-platform shader compilation/format selection remains unresolved; validate Windows GPU activation separately.
 - CI must verify this refactor before further GPU feature work. No physical iPhone Metal test is implied.
+
+
+## GPU indexed mesh rendering — 2026-10-31
+
+- Replaced the hard-coded GPU triangle preview with an SDL_GPU indexed-mesh path in `GpuRenderer`.
+- The renderer now converts the existing `Mesh` triangles into GPU vertex data (position, generated flat face normal, and face color), uploads vertex/index buffers through SDL_GPU transfer buffers, and reuses those buffers for each frame.
+- Added column-major model, view, and perspective projection matrices. Camera position/yaw/pitch and each visible `SceneObject` transform are used to produce per-object MVP uniforms.
+- The app passes the already-loaded `assets/demo.obj` mesh and both existing pyramid scene objects into the GPU backend. CPU rendering and the CPU fallback remain separate.
+- Added a depth-stencil attachment with runtime format selection between supported D32_FLOAT and D24_UNORM_S8_UINT formats, plus resize-aware depth texture recreation.
+- GPU shading currently uses generated flat normals and simple directional diffuse lighting. GPU texture sampling, material/MTL support, GPU wireframe toggle, and a shared CPU/GPU renderer interface remain unimplemented.
+- The current GPU path requests MSL and is intended for Metal-capable devices; the Windows CI job validates compilation but does not prove Windows GPU runtime activation.
+- CI for the preceding backend extraction (commit `3d242d2cfe177496bbb0da89b575aac31863aafb`) has Windows success; its iOS job was still running at the time this implementation began. This new mesh-rendering commit requires its own Windows/iOS CI run and a physical iPhone Metal test.
