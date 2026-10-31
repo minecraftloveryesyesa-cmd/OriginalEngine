@@ -5,7 +5,7 @@
 
 - Repository: https://github.com/shton13275-2/GasolineEngine
 - 開発対象ブランチ: `ios/initial-support`
-- 直近の更新前に確認したブランチHEAD: `71368b32af448c068674b3e8350143d6445005d7`（この引き継ぎ資料自体の更新コミットは別途確認すること）
+- 直近の引き継ぎ資料更新前に確認したHEAD: `7c8c1a1a89f58cf883ef89b572fa7a6b3373916c`（この資料の更新後はGitHubで最新HEADを再確認すること）
 - デフォルトブランチ: `main`（iOS作業ブランチとは別系統）
 - 言語: C++20
 - ウィンドウ・入力・GPU API: SDL 3.2.10（CMake FetchContent、`release-3.2.10`）
@@ -429,4 +429,4 @@ CI:
 ## 追記履歴
 
 - 2026-10-31: `ios/initial-support` のソース、README、CMake、workflow、GPU実装を確認して初版作成。GPU三角形プレビュー、iOS unsigned IPA workflow、CPU software renderer、iOSタッチ操作の状態を整理。
-- 2026-10-31: iOS buildのSDL3 source/Xcode DerivedData cache、Xcode versionを含むcache key、`FETCHCONTENT_UPDATES_DISCONNECTED`、明示的DerivedData path、`.app`自動検出を追記。Windows/iOS両jobで`docs/`をsparse checkout対象外にした設定を追記。キャッシュ効果はCI実測前のため未確定と明記。
+- 2026-10-31: iOS buildのSDL3 source cache、Xcode versionを含むcache key、`FETCHCONTENT_UPDATES_DISCONNECTED`、`.app`自動検出を追記。Windows/iOS両jobで`docs/`をsparse checkout対象外にした設定を追記。\n- 2026-10-31: Actionsの失敗runを調査。Xcode version出力が複数行のため`$GITHUB_OUTPUT`で不正形式になっていた問題、およびCMake経由の`xcodebuild`に`-derivedDataPath`を渡してscheme要求エラーになっていた問題を確認。workflowを修正し、Xcode versionを1行化、DerivedData cache/引数を一旦除去してSDL3 source cacheのみ残した。修正後CIの結果は未確認。
