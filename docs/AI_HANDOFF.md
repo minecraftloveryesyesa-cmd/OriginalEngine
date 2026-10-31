@@ -463,3 +463,13 @@ CI:
 - CPU mode retains its existing SDL_Renderer overlay path.
 - The GPU renderer receives touch-control visibility and current movement pointer state from the main loop.
 - CI compilation is required; actual Metal rendering and touch interaction still need physical iPhone verification.
+
+
+## FPS and touch-control visual refresh — 2026-10-31
+
+- Main loop calculates a smoothed FPS value once per frame and passes it to both render backends.
+- CPU mode displays FPS using SDL_RenderDebugText.
+- GPU mode displays FPS through a screen-space bitmap glyph renderer without SDL_Renderer.
+- CPU and GPU touch controls share a refreshed layout: concentric movement rings, crosshair guides, and a responsive center knob; the look-control guide uses the same visual language.
+- GPU backend-switch control is labeled CPU.
+- CI validates compilation and existing smoke/unit tests; visual appearance and touch interaction still require device/runtime verification.
