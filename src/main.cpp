@@ -268,6 +268,9 @@ int main(int argc, char* argv[]) {
             {&demoMesh, demoObject, texturePath.string()},
             {&demoMesh, leftObject, texturePath.string()}
         };
+        const std::vector<const originalengine::SceneObject*> gpuSceneObjects{
+            demoObject, leftObject
+        };
         // Conservative static bounds around the demo cube.
         collisionWorld.addObstacle({-1.4F, -1.4F, 2.8F, 1.4F, 1.4F, 5.6F});
         bool running = true;
@@ -396,7 +399,7 @@ int main(int argc, char* argv[]) {
                     SDL_DestroyRenderer(renderer);
                     renderer = nullptr;
                     gpuRenderer = std::make_unique<originalengine::GpuRenderer>();
-                    if (gpuRenderer->initialize(window)) {
+                    if (gpuRenderer->initialize(window, demoMesh)) {
                         gpuMode = true;
                         writeDiagnostic("GPU renderer active: " + gpuRenderer->driverName());
                         SDL_SetWindowTitle(window, "Gasoline Engine | GPU preview | G: switch to CPU");
@@ -460,8 +463,9 @@ int main(int argc, char* argv[]) {
             }
 
             if (gpuMode) {
-                if (gpuRenderer == nullptr || !gpuRenderer->renderFrame()) {
-                    writeDiagnostic(std::string("GPU preview frame failed: ") + SDL_GetError());
+                if (gpuRenderer == nullptr || !gpuRenderer->renderFrame(camera, gpuSceneObjects)) {
+                    writeDiagnostic(std::string("GPU mesh frame failed: ") +
+                        (gpuRenderer != nullptr ? gpuRenderer->lastError() : "renderer unavailable"));
                     exitCode = 1;
                     break;
                 }
