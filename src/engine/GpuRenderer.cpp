@@ -769,6 +769,8 @@ void GpuRenderer::drawOverlayText(
     Uint32 viewportHeight, const float color[4]) {
     auto glyph = [](char character) -> const char* {
         switch (character) {
+        case 'C': return "011/100/100/100/011";
+        case 'U': return "101/101/101/101/111";
         case 'F': return "111/100/110/100/100";
         case 'P': return "110/101/110/100/100";
         case 'S': return "111/100/111/001/111";
