@@ -45,8 +45,8 @@ GasolineEngineは、C++20とSDL3を使ったクロスプラットフォーム3D�
 
 重要な現状認識:
 - CPUソフトウェアレンダラーは既に多くの機能を持つ。
-- GPU経路は試験的な段階。GPUデバイス・スワップチェーン・三角形プレビューがあるが、既存3DシーンをGPUで描画する完成レンダラーではない。
-- GPUモードで表示される三角形は、OBJモデルの描画ではなく、頂点IDから生成する固定プレビュー。
+- GPU経路は試験的な段階だが、独立したGpuRendererでOBJメッシュ、複数SceneObject、深度テスト、タッチオーバーレイをSDL_GPU経由で描画する。
+- 現在のGPU経路はP3 PPMテクスチャのUVサンプリングと環境光・方向光・Blinn-Phongスペキュラを実装済み。iPhone実機でのMetal描画は未確認。
 - 「GPU描画対応済み」「Metalシェーダーが実際にロードされる」といった表現は、コードと実機で確認できるまでは使わない。
 
 ## 2. ブランチ・作業対象の注意
@@ -126,44 +126,32 @@ GitHubには少なくとも次のブランチが存在する。
 
 ## 4. GPUバックエンドの正確な状態
 
-### 既に存在するコード
-- `src/main.cpp` にSDL_GPU初期化、ウィンドウClaim、スワップチェーン取得、GPUコマンド送信処理がある。
-- `--gpu-smoke-test` はGPUデバイスを作り、ウィンドウをClaimし、swapchain textureを取得し、Render Passでクリアし、コマンドをSubmitする。
-- `initializeGpuBackend()` はGPUデバイスを作り、SDL_ClaimWindowForGPUDeviceでウィンドウをClaimする。
-- `createGpuTrianglePipeline()` はMSLソースを文字列として保持し、SDL_CreateGPUShaderで頂点/フラグメントシェーダーを作り、Graphics Pipelineを作る。
-- 頂点シェーダーは `vertex_id` から3頂点の位置と色を生成する。頂点バッファは使わない。
-- `renderGpuPreviewFrame()` はswapchain textureを取得し、Render Passを開始し、PipelineをBindして `SDL_DrawGPUPrimitives(..., 3, 1, 0, 0)` を呼ぶ。
-- GPU/CPU切替処理があり、GPU有効化に失敗した場合はCPU rendererを再生成するフォールバック経路がある。
-- GPUデバイス、Pipeline、Window Claimを終了時に解放する処理がある。
-- `src/engine/GpuDeviceProbe.cpp` と `include/engine/GpuDeviceProbe.hpp` に、GPUデバイスの利用可否・driver名・shader formatを調べるProbeクラスがある。ただし、ProbeはウィンドウをClaimせず、描画機能そのものではない。
+### 現在の実装
+- GPU描画処理は `include/engine/GpuRenderer.hpp` / `src/engine/GpuRenderer.cpp` に分離されている。
+- SDL_GPU device、window claim、MSL shader、graphics pipeline、vertex/index buffer、depth texture、color texture、samplerの生成と解放をGpuRendererが管理する。
+- OBJ Meshのposition、normal、color、UVをGPU頂点形式へ変換し、SDL_GPU transfer buffer経由でアップロードする。
+- カメラのview/projectionと各SceneObjectのmodel transformを使い、複数オブジェクトをindexed drawする。
+- Depth-Stencil Attachmentを作成し、depth test/writeを有効化。画面サイズ変更時はdepth textureを再作成する。
+- P3 ASCII PPMをRGBA8へ変換するPpmImageLoaderを追加。GPU側でSDL_GPUTextureへ転送し、fragment sampler slot 0へbindする。
+- OBJのUVはGPUへ渡し、画像の行方向に合わせてVを反転する。UVがない頂点はテクスチャを参照しないfallbackにする。
+- OBJにvnがある場合はその法線を使用し、ない場合は三角形ごとのflat normalを生成する。
+- per-object uniformにMVP、model、inverse-transpose normal matrix、camera positionを渡す。fragment shaderはambient、directional diffuse、Blinn-Phong specularを計算する。
+- GPU overlayはタッチガイド、FPS、CPU切替ボタンを描画する。CPU側のfallbackは維持する。
+- GPU初期化はMSLを要求するため、Metal対応GPUを主対象とする。Windows CIのコンパイル成功はWindowsでのGPU runtime対応を意味しない。
 
-### Metal shader files
-- `shaders/Metal/Basic3D.vert.metal`
-- `shaders/Metal/Basic3D.frag.metal`
-- iOS CMake設定で `Resources/shaders` に同梱する。
-- **現状のGPU三角形Pipelineは、これらのファイルを読まず、main.cpp内のMSL文字列を使う。**
-- 外部ファイルのシェーダーは、現時点ではリソースとして追加されているだけ。実行時ロード・コンパイルに接続済みだと誤認しない。
-- シェーダーの頂点入力属性・Uniform設計はあるが、GPUパイプラインへの実接続は未完了。
+### Metal shaderの扱い
+- 現在実行時に使うmesh shaderは `src/engine/GpuRenderer.cpp` 内のMSL文字列。
+- `shaders/Metal/Basic3D.*.metal` はbundleへ同梱されるが、現行GpuRendererの実行時shader sourceではない。
+- SDL 3.2.10のshader resource binding規則に合わせ、fragment texture/sampler slot 0を使用する。
 
-### GPUで未実装の重要機能
-- 既存OBJメッシュをGPU頂点/インデックスバッファへアップロード。
-- モデル/ビュー/投影行列のGPU送信。
-- シーン内複数オブジェクトのGPU描画。
-- 深度テクスチャ/Depth-Stencil AttachmentによるGPU深度テスト。
-- GPUテクスチャ作成・アップロード・サンプリング。
-- GPU側のライティング。
-- CPUとGPUで同じシーンを描画する共通Renderer API。
-- GPUとCPUの画質・機能差の縮小。
-- iPhone実機でのGPU三角形描画の確認。
-- GPU切替を繰り返したときのリソースリーク/クラッシュ確認。
-- GPUのFPS・フレーム時間の計測。
-
-### 重要な注意
-- GPUモードで画面が単色になるだけの旧段階と、現在の三角形プレビュー段階を混同しない。
-- 三角形が表示できても、3Dメッシュ描画ができたことにはならない。
-- CIでiOS IPAが作れたことは、iPhone上のMetal実行成功を意味しない。
-- `SDL_GPU_SHADERFORMAT_MSL` はSDL_GPUの対応フォーマット指定の一つ。実際のSDL3のAPI仕様は、FetchContentで使うSDL 3.2.10のヘッダーを参照して判断する。
-- SDL_GPUのリソース所有権、Render Pass、Swapchain、Submit/Cancelの規則に従う。Swapchain texture取得後に安易にCommandBufferをCancelしない。失敗経路はSDL3の該当バージョン仕様を確認する。
+### 未実装・未確認
+- MTL material parsing、materialごとの複数texture。
+- PNG/JPEG/BMPのGPU texture loader（現GPU loaderはP3 PPMのみ）。
+- mipmap生成、anisotropic filtering、normal map。
+- GPU wireframe modeとCPU/GPU共通Renderer API。
+- iPhone実機でのMetal shader compile、texture sampling、lightingの見た目、タッチ操作。
+- GPU/CPU切替を繰り返した場合の長時間安定性・resource leak。
+- GPU側のFPS/frame-time計測の精度検証。
 
 ## 5. iOS対応・ビルド・配布
 
@@ -248,19 +236,16 @@ GitHubには少なくとも次のブランチが存在する。
 - 画面左半分のドラッグ: 仮想ジョイスティックによる移動。
 - 画面右半分のドラッグ: 視点操作。
 - 左右を同時に操作可能な設計。
-- 画面上のGPU/CPU切替ボタン: 描画バックエンド切替。現在GPU側はプレビュー段階。
+- 画面上のGPU/CPU切替ボタン: 描画バックエンド切替。GPU側はOBJメッシュ/PPMテクスチャを描画する試験的な経路。実機動作は未確認。
 
 ## 8. 未実装・既知の制限
 
 - GPU rendererはCPU rendererと同じ機能を持たない。
-- GPUの三角形プレビューはOBJ/Scene/Cameraを使わない。
-- Metal shader sourceファイルは同梱されるが、現在のGPU preview pipelineはmain.cpp内のMSL文字列を使う。
-- GPU depth bufferは未実装。
-- GPU mesh vertex/index buffer uploadは未実装。
-- GPU texture samplingは未実装。
-- GPU shader external asset loadingは未実装。
-- MTL material parserは未実装。
-- PNG/JPEG decoderは未実装（現行READMEにあるPPM/BMP対応を維持）。
+- GPU mesh描画はOBJ、SceneObject、Camera、depth testに対応するが、GPU wireframeや全CPU描画機能の移植は未完了。
+- GPUの実行時mesh shaderはGpuRenderer.cpp内のMSL文字列。shaders/Metal内の別ファイルは実行時ロードしていない。
+- GPU texture samplingはP3 ASCII PPMに対応。PNG/JPEG/BMPのGPU upload、MTL material parser、複数material/textureは未実装。
+- mipmap、normal map、anisotropic filteringは未実装。
+- iOSの物理端末GPU/Metal検証はCIだけではできない。
 - AABB以外の本格的な物理・衝突は未実装。
 - iOSの物理端末GPU検証はCIだけではできない。
 - 未署名IPAは端末への通常インストールを保証しない。現在のユーザー環境で使えるLiveContainer等の方法をユーザーの実績に沿って確認する。
@@ -273,37 +258,25 @@ GitHubには少なくとも次のブランチが存在する。
 3. CPU rendererへのフォールバックを維持。
 4. GPU切替失敗、初期化失敗、終了時のリソース解放をテスト。
 
-### P1 — GPUプレビューを堅牢化
-1. GPUプレビュー三角形がiOS実機で表示されることを確認。
-2. GPU/CPU切替を繰り返してもクラッシュしないことを確認。
-3. SDL_GPUのresource lifecycleとswapchainサイズ変更を処理。
-4. GPU backendの診断ログを充実させる。
-5. GPU smoke testを可能な範囲で自動テストに組み込む。
+### P1 — GPU texture/lightingの実機検証
+1. 最新iOS unsigned IPAを作成し、iPhone/LiveContainerで起動確認。
+2. Metal shader compile、PPM texture sampling、UV方向、ambient/diffuse/specularの表示を確認。
+3. GPU/CPU切替とアプリ終了を繰り返し、resource lifecycleを確認。
+4. 非均一スケールとOBJ vnの有無で法線表示を確認。
 
-### P2 — 実シーンをGPU描画
-1. GPU専用Rendererクラスを作り、main.cppからGPU API詳細を分離。
-2. MeshVertexをGPU頂点形式へ変換。
-3. 頂点/インデックスバッファを作成し、GPUへアップロード。
-4. Camera/TransformからMVP行列を計算してuniform送信。
-5. デモ三角形からOBJピラミッドへ移行。
-6. 複数SceneObjectのTransformとvisibleをGPU描画へ反映。
+### P2 — GPU materialと品質向上
+1. MTLのKd/Ks/Nsとmaterialごとのtexture参照を追加。
+2. PNG/JPEG等の画像形式を追加（既存依存関係とiOS bundleを確認して選定）。
+3. mipmap生成とanisotropic filteringを追加。
+4. GPU wireframeとnormal mapを検討。
+5. CPU/GPU共通Renderer APIと描画品質の比較を進める。
 
-### P3 — GPU深度・テクスチャ
-1. Depth-Stencil Textureを作成。
-2. Depth test/writeを有効化。
-3. PPM/BMP画像をSDL_GPUTextureへ転送。
-4. samplerとUV補間を実装。
-5. CPU rendererとの画質差を比較し、フォールバックを維持。
+### P3 — 安定性・性能
+1. GPU resourceの失敗経路と解放をテスト。
+2. GPU/CPU切替の長時間テスト。
+3. FPS/frame-timeの計測を整備。
+4. 実機で負荷・発熱・メモリ使用量を測定。
 
-### P4 — 品質向上
-- MTL読み込み。
-- PNG/JPEG等の画像形式。
-- ライティング、法線、マテリアル。
-- FPS/frame time表示とGPU/CPU比較。
-- 音声・物理演算。
-- プラットフォーム追加。
-
-順序は依存関係に応じて調整してよい。ただしP0を壊さないこと。
 
 ## 10. 開発・検証ルール
 
