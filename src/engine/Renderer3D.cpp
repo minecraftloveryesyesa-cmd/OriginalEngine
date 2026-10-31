@@ -503,6 +503,25 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
     SDL_SetRenderDrawColor(renderer_, 12, 18, 31, 255);
     SDL_RenderClear(renderer_);
 
+    const std::size_t pixelCount = static_cast<std::size_t>(width) *
+                                   static_cast<std::size_t>(height);
+    if (colorBuffer_.size() != pixelCount * 4U ||
+        depthBuffer_.size() != pixelCount) {
+        try {
+            colorBuffer_.resize(pixelCount * 4U);
+            depthBuffer_.resize(pixelCount);
+        } catch (const std::bad_alloc&) {
+            SDL_Log("Could not allocate software render buffers.");
+            return false;
+        } catch (const std::length_error&) {
+            SDL_Log("Software render buffer dimensions exceed the supported size.");
+            return false;
+        }
+    }
+
+    // Wireframe rendering also uses the software depth buffer for the rotating
+    // sample cube. Allocate that buffer independently from the SDL texture,
+    // which is only needed by the filled software-rendering path.
     if (!wireframe && (depthTexture_ == nullptr ||
                        textureWidth_ != width || textureHeight_ != height)) {
         if (depthTexture_ != nullptr) {
@@ -517,15 +536,6 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         }
         if (!SDL_SetTextureBlendMode(depthTexture_, SDL_BLENDMODE_BLEND)) {
             SDL_Log("Could not set depth-buffer texture blend mode: %s", SDL_GetError());
-            return false;
-        }
-        try {
-            colorBuffer_.resize(static_cast<std::size_t>(width) *
-                                static_cast<std::size_t>(height) * 4U);
-            depthBuffer_.resize(static_cast<std::size_t>(width) *
-                                static_cast<std::size_t>(height));
-        } catch (const std::bad_alloc&) {
-            SDL_Log("Could not allocate software render buffers.");
             SDL_DestroyTexture(depthTexture_);
             depthTexture_ = nullptr;
             return false;
@@ -533,11 +543,10 @@ bool Renderer3D::render(int width, int height, double elapsedSeconds,
         textureWidth_ = width;
         textureHeight_ = height;
     }
-    if (!wireframe) {
-        std::fill(colorBuffer_.begin(), colorBuffer_.end(), Uint8{0});
-        std::fill(depthBuffer_.begin(), depthBuffer_.end(),
-                  std::numeric_limits<float>::infinity());
-    }
+
+    std::fill(colorBuffer_.begin(), colorBuffer_.end(), Uint8{0});
+    std::fill(depthBuffer_.begin(), depthBuffer_.end(),
+              std::numeric_limits<float>::infinity());
 
     const float scale = static_cast<float>(std::min(width, height)) * 0.42F;
     const float centerX = static_cast<float>(width) * 0.5F;
