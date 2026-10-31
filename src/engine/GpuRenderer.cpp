@@ -782,13 +782,13 @@ void GpuRenderer::drawOverlayText(
         const std::string_view pattern = glyph(*cursor);
         int row = 0;
         int column = 0;
-        for (const char* pixel = pattern; *pixel != '\0'; ++pixel) {
-            if (*pixel == '/') { ++row; column = 0; continue; }
-            if (*pixel == '1') {
+        for (const char pixel : pattern) {
+            if (pixel == '/') { ++row; column = 0; continue; }
+            if (pixel == '1') {
                 drawOverlayRect(commandBuffer, pass,
-                    x + static_cast<float>(column) * 3.0F,
-                    y + static_cast<float>(row) * 3.0F,
-                    2.0F, 2.0F, viewportWidth, viewportHeight, color);
+                    x + static_cast<float>(column) * fontPixelSize,
+                    y + static_cast<float>(row) * fontPixelSize,
+                    fontPixelSize, fontPixelSize, viewportWidth, viewportHeight, color);
             }
             ++column;
         }
