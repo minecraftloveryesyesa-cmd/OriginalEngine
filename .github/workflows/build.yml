@@ -51,6 +51,14 @@ jobs:
       - name: Set up CMake
         uses: lukka/get-cmake@latest
 
+      # SDL3 is pinned to release-3.2.10. Reuse its checked-out source
+      # between runs so FetchContent does not need to clone it every time.
+      - name: Cache SDL3 source
+        uses: actions/cache@v4
+        with:
+          path: build-ios/_deps/sdl3-src
+          key: ${{ runner.os }}-sdl3-release-3.2.10
+
       - name: Configure iOS Device
         run: >-
           cmake -S . -B build-ios -G Xcode
@@ -60,6 +68,7 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
           -DORIGINALENGINE_BUILD_APP=ON
           -DBUILD_TESTING=OFF
+          -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
 
       - name: Build unsigned iOS app
         run: >-
