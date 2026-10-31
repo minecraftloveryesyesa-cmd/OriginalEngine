@@ -463,7 +463,9 @@ int main(int argc, char* argv[]) {
             }
 
             if (gpuMode) {
-                if (gpuRenderer == nullptr || !gpuRenderer->renderFrame(camera, gpuSceneObjects)) {
+                if (gpuRenderer == nullptr || !gpuRenderer->renderFrame(
+                        camera, gpuSceneObjects, !smokeTest, hasMovementFinger,
+                        movementX, movementY)) {
                     writeDiagnostic(std::string("GPU mesh frame failed: ") +
                         (gpuRenderer != nullptr ? gpuRenderer->lastError() : "renderer unavailable"));
                     exitCode = 1;
