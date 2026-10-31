@@ -434,11 +434,12 @@ int main(int argc, char* argv[]) {
             if (exitCode != 0) break;
 
             const Uint64 currentTicks = SDL_GetTicks();
-            const float deltaSeconds = std::min(
-                static_cast<float>(currentTicks - previousTicks) / 1000.0F, 0.1F);
+            const float frameSeconds =
+                static_cast<float>(currentTicks - previousTicks) / 1000.0F;
+            const float deltaSeconds = std::min(frameSeconds, 0.1F);
             previousTicks = currentTicks;
-            if (deltaSeconds > 0.0001F) {
-                const float instantaneousFps = 1.0F / deltaSeconds;
+            if (frameSeconds > 0.0001F) {
+                const float instantaneousFps = 1.0F / frameSeconds;
                 smoothedFps = smoothedFps <= 0.0F
                     ? instantaneousFps
                     : smoothedFps * 0.88F + instantaneousFps * 0.12F;
