@@ -800,8 +800,8 @@ void GpuRenderer::drawOverlay(
 
     // Tiny 3x5 bitmap font keeps the backend-switch label available without
     // depending on SDL_Renderer or a separate font subsystem.
-    const char* glyphs[3] = {"111/101/110/101/111", "101/101/101/101/111",
-                             "110/101/110/100/100"};
+    const char* glyphs[3] = {"111/100/100/100/111", "110/101/110/100/100",
+                             "101/101/101/101/111"};
     const float textWidth = 3.0F * 3.0F + 2.0F * 2.0F;
     const float textStartX = buttonX + (98.0F - textWidth) * 0.5F;
     const float textStartY = 31.0F;
