@@ -21,6 +21,7 @@ add_library(originalengine
     src/engine/Renderer3D.cpp
     src/engine/Scene.cpp
     src/engine/ObjMeshLoader.cpp
+    src/engine/PpmImageLoader.cpp
 )
 
 target_include_directories(originalengine
@@ -127,6 +128,10 @@ if(BUILD_TESTING)
     add_executable(originalengine_obj_mesh_tests tests/obj_mesh_loader_tests.cpp)
     target_link_libraries(originalengine_obj_mesh_tests PRIVATE originalengine)
     add_test(NAME obj_mesh_loader COMMAND originalengine_obj_mesh_tests)
+
+    add_executable(originalengine_ppm_image_tests tests/ppm_image_loader_tests.cpp)
+    target_link_libraries(originalengine_ppm_image_tests PRIVATE originalengine)
+    add_test(NAME ppm_image_loader COMMAND originalengine_ppm_image_tests)
 
     add_executable(originalengine_renderer3d_tests tests/renderer3d_tests.cpp)
     target_link_libraries(originalengine_renderer3d_tests PRIVATE originalengine)

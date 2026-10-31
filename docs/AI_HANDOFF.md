@@ -5,7 +5,7 @@
 
 - Repository: https://github.com/shton13275-2/GasolineEngine
 - 開発対象ブランチ: `ios/initial-support`
-- 直近の引き継ぎ資料更新前に確認したHEAD: `7c8c1a1a89f58cf883ef89b572fa7a6b3373916c`（この資料の更新後はGitHubで最新HEADを再確認すること）
+- GPUテクスチャ/ライティング実装の開始時に確認したHEAD: `4afbfa25df8aac349285beef6b41bc980a8fa10d`（作業ブランチは常にGitHubで再確認すること）
 - デフォルトブランチ: `main`（iOS作業ブランチとは別系統）
 - 言語: C++20
 - ウィンドウ・入力・GPU API: SDL 3.2.10（CMake FetchContent、`release-3.2.10`）
@@ -483,3 +483,15 @@ CI:
 - CPU and GPU touch controls share a refreshed layout: concentric movement rings, crosshair guides, and a responsive center knob; the look-control guide uses the same visual language.
 - GPU backend-switch control is labeled CPU.
 - CI validates compilation and existing smoke/unit tests; visual appearance and touch interaction still require device/runtime verification.
+
+
+## GPU texture and lighting — 2026-10-31
+
+- Added PpmImageLoader for the repository's existing ASCII P3 PPM assets. It validates dimensions, maximum channel value, pixel count, and channel ranges; failed loads preserve the previous output image.
+- GPU vertex data now includes UV coordinates. OBJ UVs are passed to the GPU, with V flipped to match the top-left row order of the PPM image. Vertices without UVs use a sentinel and retain a white untextured fallback.
+- GpuRenderer::initialize now receives the decoded RGBA image, creates an SDL_GPU sampler texture, uploads its pixels with SDL_UploadToGPUTexture, and binds the texture/sampler to fragment slot 0.
+- The embedded Metal fragment shader samples the texture and applies ambient, directional diffuse, and Blinn-Phong specular lighting.
+- OBJ-provided vertex normals are used when present; missing normals continue to use generated flat face normals.
+- Per-object constants now include model, MVP, inverse-transpose normal matrix, and camera position. The normal matrix handles non-uniform scale and falls back to identity for singular transforms to avoid NaNs.
+- The sample PPM loader supports P3 ASCII only. PNG/JPEG/BMP loading and MTL material parsing are not included in this step.
+- Added PPM loader unit tests. CI and physical iPhone Metal runtime still need to validate this change; a successful compile does not prove texture sampling on device.

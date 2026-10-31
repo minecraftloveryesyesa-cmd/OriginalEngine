@@ -7,6 +7,7 @@
 
 #include "engine/Camera.hpp"
 #include "engine/Mesh.hpp"
+#include "engine/PpmImageLoader.hpp"
 #include "engine/Scene.hpp"
 
 namespace originalengine {
@@ -22,7 +23,7 @@ public:
     GpuRenderer(const GpuRenderer&) = delete;
     GpuRenderer& operator=(const GpuRenderer&) = delete;
 
-    [[nodiscard]] bool initialize(SDL_Window* window, const Mesh& mesh);
+    [[nodiscard]] bool initialize(SDL_Window* window, const Mesh& mesh, const RgbaImage& texture);
     [[nodiscard]] bool renderFrame(
         const Camera& camera, const std::vector<const SceneObject*>& objects,
         bool showTouchControls = true, bool movementActive = false,
@@ -58,6 +59,8 @@ private:
     SDL_GPUBuffer* vertexBuffer_{nullptr};
     SDL_GPUBuffer* indexBuffer_{nullptr};
     SDL_GPUTexture* depthTexture_{nullptr};
+    SDL_GPUTexture* colorTexture_{nullptr};
+    SDL_GPUSampler* colorSampler_{nullptr};
     SDL_GPUTextureFormat depthFormat_{SDL_GPU_TEXTUREFORMAT_INVALID};
     Uint32 depthWidth_{0};
     Uint32 depthHeight_{0};

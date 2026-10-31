@@ -4,6 +4,7 @@
 #include "engine/GpuDeviceProbe.hpp"
 #include "engine/GpuRenderer.hpp"
 #include "engine/ObjMeshLoader.hpp"
+#include "engine/PpmImageLoader.hpp"
 #include "engine/Scene.hpp"
 #include "engine/TouchOverlay.hpp"
 
@@ -258,6 +259,14 @@ int main(int argc, char* argv[]) {
         std::string meshError;
         const std::filesystem::path meshPath = resolveAssetPath("assets/demo.obj");
         const std::filesystem::path texturePath = resolveAssetPath("assets/demo_texture.ppm");
+        originalengine::RgbaImage demoTexture;
+        std::string textureError;
+        if (!originalengine::PpmImageLoader::loadFromFile(texturePath, demoTexture, &textureError)) {
+            writeDiagnostic("Could not load GPU texture " + texturePath.string() + ": " + textureError);
+        } else {
+            writeDiagnostic("Loaded PPM texture: " + std::to_string(demoTexture.width) + "x" +
+                            std::to_string(demoTexture.height));
+        }
         writeDiagnostic("Stage: loading OBJ: " + meshPath.string());
         if (!originalengine::ObjMeshLoader::loadFromFile(meshPath.string(), demoMesh, &meshError)) {
             writeDiagnostic("Could not load mesh " + meshPath.string() + ": " + meshError);
@@ -424,7 +433,7 @@ int main(int argc, char* argv[]) {
                     SDL_DestroyRenderer(renderer);
                     renderer = nullptr;
                     gpuRenderer = std::make_unique<originalengine::GpuRenderer>();
-                    if (gpuRenderer->initialize(window, demoMesh)) {
+                    if (gpuRenderer->initialize(window, demoMesh, demoTexture)) {
                         gpuMode = true;
                         writeDiagnostic("GPU renderer active: " + gpuRenderer->driverName());
                         SDL_SetWindowTitle(window, "Gasoline Engine | GPU preview | G: switch to CPU");

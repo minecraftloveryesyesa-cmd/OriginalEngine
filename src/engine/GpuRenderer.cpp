@@ -19,9 +19,17 @@ struct GpuVertex {
     float position[3];
     float normal[3];
     float color[3];
+    float uv[2];
 };
 
 using Matrix4 = std::array<float, 16>;
+
+struct ObjectConstants {
+    Matrix4 mvp{};
+    Matrix4 model{};
+    Matrix4 normalMatrix{};
+    float cameraPosition[4]{};
+};
 
 constexpr char vertexSource[] = R"metal(
 #include <metal_stdlib>
@@ -31,16 +39,22 @@ struct VertexInput {
     float3 position [[attribute(0)]];
     float3 normal [[attribute(1)]];
     float3 color [[attribute(2)]];
+    float2 uv [[attribute(3)]];
 };
 
 struct VertexOutput {
     float4 position [[position]];
     float3 normal;
     float3 color;
+    float2 uv;
+    float3 viewDirection;
 };
 
 struct CameraConstants {
     float4x4 mvp;
+    float4x4 model;
+    float4x4 normalMatrix;
+    float4 cameraPosition;
 };
 
 vertex VertexOutput main_vertex(
@@ -48,9 +62,12 @@ vertex VertexOutput main_vertex(
     constant CameraConstants& camera [[buffer(0)]])
 {
     VertexOutput output;
+    const float4 worldPosition = camera.model * float4(input.position, 1.0);
     output.position = camera.mvp * float4(input.position, 1.0);
-    output.normal = input.normal;
+    output.normal = normalize((camera.normalMatrix * float4(input.normal, 0.0)).xyz);
     output.color = input.color;
+    output.uv = input.uv;
+    output.viewDirection = normalize(camera.cameraPosition.xyz - worldPosition.xyz);
     return output;
 }
 )metal";
@@ -63,13 +80,25 @@ struct VertexOutput {
     float4 position [[position]];
     float3 normal;
     float3 color;
+    float2 uv;
+    float3 viewDirection;
 };
 
-fragment float4 main_fragment(VertexOutput input [[stage_in]])
+fragment float4 main_fragment(
+    VertexOutput input [[stage_in]],
+    texture2d<float> baseColorTexture [[texture(0)]],
+    sampler baseColorSampler [[sampler(0)]])
 {
+    const float3 albedo = any(input.uv < float2(0.0))
+        ? input.color
+        : baseColorTexture.sample(baseColorSampler, input.uv).rgb * input.color;
+    const float3 normal = normalize(input.normal);
     const float3 lightDirection = normalize(float3(-0.35, 0.8, -0.45));
-    const float diffuse = max(dot(normalize(input.normal), lightDirection), 0.18);
-    return float4(input.color * diffuse, 1.0);
+    const float diffuse = max(dot(normal, lightDirection), 0.0);
+    const float3 halfVector = normalize(lightDirection + normalize(input.viewDirection));
+    const float specular = pow(max(dot(normal, halfVector), 0.0), 32.0) * 0.18;
+    const float3 lighting = albedo * (0.20 + diffuse * 0.78) + float3(specular);
+    return float4(lighting, 1.0);
 }
 )metal";
 
@@ -236,6 +265,39 @@ Matrix4 modelMatrix(const Transform& transform) {
                     multiply(rotations, scaleMatrix(transform.scale)));
 }
 
+Matrix4 normalMatrix(const Transform& transform) {
+    const Matrix4 model = modelMatrix(transform);
+    const float a00 = model[0], a01 = model[4], a02 = model[8];
+    const float a10 = model[1], a11 = model[5], a12 = model[9];
+    const float a20 = model[2], a21 = model[6], a22 = model[10];
+    const float c00 = a11 * a22 - a12 * a21;
+    const float c01 = a12 * a20 - a10 * a22;
+    const float c02 = a10 * a21 - a11 * a20;
+    const float c10 = a02 * a21 - a01 * a22;
+    const float c11 = a00 * a22 - a02 * a20;
+    const float c12 = a01 * a20 - a00 * a21;
+    const float c20 = a01 * a12 - a02 * a11;
+    const float c21 = a02 * a10 - a00 * a12;
+    const float c22 = a00 * a11 - a01 * a10;
+    const float determinant = a00 * c00 + a01 * c01 + a02 * c02;
+
+    Matrix4 result = identityMatrix();
+    if (std::abs(determinant) <= 1.0e-8F) {
+        return result;
+    }
+    const float inverseDeterminant = 1.0F / determinant;
+    result[0] = c00 * inverseDeterminant;
+    result[4] = c01 * inverseDeterminant;
+    result[8] = c02 * inverseDeterminant;
+    result[1] = c10 * inverseDeterminant;
+    result[5] = c11 * inverseDeterminant;
+    result[9] = c12 * inverseDeterminant;
+    result[2] = c20 * inverseDeterminant;
+    result[6] = c21 * inverseDeterminant;
+    result[10] = c22 * inverseDeterminant;
+    return result;
+}
+
 Matrix4 viewMatrix(const Camera& camera) {
     const float yaw = camera.yaw();
     const float pitch = camera.pitch();
@@ -317,20 +379,30 @@ bool buildGpuGeometry(const Mesh& mesh, std::vector<GpuVertex>& vertices,
             continue;
         }
 
-        const float normal[3]{nx / length, ny / length, nz / length};
-        const float color[3]{
-            0.30F + std::abs(normal[0]) * 0.45F,
-            0.36F + std::abs(normal[1]) * 0.42F,
-            0.48F + std::abs(normal[2]) * 0.40F
-        };
+        const float faceNormal[3]{nx / length, ny / length, nz / length};
         const MeshVertex* corners[3]{&a, &b, &c};
         for (const MeshVertex* corner : corners) {
             GpuVertex vertex{};
             vertex.position[0] = corner->x;
             vertex.position[1] = corner->y;
             vertex.position[2] = corner->z;
-            std::copy(std::begin(normal), std::end(normal), std::begin(vertex.normal));
-            std::copy(std::begin(color), std::end(color), std::begin(vertex.color));
+            float selectedNormal[3]{faceNormal[0], faceNormal[1], faceNormal[2]};
+            if (corner->hasNormal) {
+                const float normalLength = std::sqrt(
+                    corner->nx * corner->nx + corner->ny * corner->ny + corner->nz * corner->nz);
+                if (normalLength > 1.0e-7F) {
+                    selectedNormal[0] = corner->nx / normalLength;
+                    selectedNormal[1] = corner->ny / normalLength;
+                    selectedNormal[2] = corner->nz / normalLength;
+                }
+            }
+            std::copy(std::begin(selectedNormal), std::end(selectedNormal),
+                      std::begin(vertex.normal));
+            vertex.color[0] = 1.0F;
+            vertex.color[1] = 1.0F;
+            vertex.color[2] = 1.0F;
+            vertex.uv[0] = corner->hasTexCoord ? corner->u : -1.0F;
+            vertex.uv[1] = corner->hasTexCoord ? 1.0F - corner->v : -1.0F;
             const auto index = static_cast<std::uint32_t>(vertices.size());
             vertices.push_back(vertex);
             indices.push_back(index);
@@ -410,7 +482,7 @@ void GpuRenderer::setError(const char* operation) {
     lastError_ = std::string(operation) + " failed: " + SDL_GetError();
 }
 
-bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
+bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh, const RgbaImage& texture) {
     shutdown();
     lastError_.clear();
     driverName_.clear();
@@ -422,6 +494,14 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
     std::vector<GpuVertex> vertices;
     std::vector<std::uint32_t> indices;
     if (!buildGpuGeometry(mesh, vertices, indices, lastError_)) {
+        return false;
+    }
+    if (texture.empty()) {
+        lastError_ = "Cannot initialize GPU renderer without a valid RGBA texture";
+        return false;
+    }
+    if (texture.pixels.size() > std::numeric_limits<Uint32>::max()) {
+        lastError_ = "Texture upload exceeds SDL_GPU transfer buffer size limits";
         return false;
     }
 
@@ -480,6 +560,91 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
     }
     indexCount_ = static_cast<Uint32>(indices.size());
 
+    SDL_GPUTextureCreateInfo textureInfo{};
+    textureInfo.type = SDL_GPU_TEXTURETYPE_2D;
+    textureInfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    textureInfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    textureInfo.width = texture.width;
+    textureInfo.height = texture.height;
+    textureInfo.layer_count_or_depth = 1;
+    textureInfo.num_levels = 1;
+    textureInfo.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    colorTexture_ = SDL_CreateGPUTexture(device_, &textureInfo);
+    if (colorTexture_ == nullptr) {
+        setError("SDL_CreateGPUTexture(color)");
+        shutdown();
+        return false;
+    }
+
+    SDL_GPUTransferBufferCreateInfo textureTransferInfo{};
+    textureTransferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    textureTransferInfo.size = static_cast<Uint32>(texture.pixels.size());
+    SDL_GPUTransferBuffer* textureTransfer =
+        SDL_CreateGPUTransferBuffer(device_, &textureTransferInfo);
+    if (textureTransfer == nullptr) {
+        setError("SDL_CreateGPUTransferBuffer(texture)");
+        shutdown();
+        return false;
+    }
+    void* textureMapped = SDL_MapGPUTransferBuffer(device_, textureTransfer, false);
+    if (textureMapped == nullptr) {
+        setError("SDL_MapGPUTransferBuffer(texture)");
+        SDL_ReleaseGPUTransferBuffer(device_, textureTransfer);
+        shutdown();
+        return false;
+    }
+    std::memcpy(textureMapped, texture.pixels.data(), texture.pixels.size());
+    SDL_UnmapGPUTransferBuffer(device_, textureTransfer);
+
+    SDL_GPUCommandBuffer* textureCommandBuffer = SDL_AcquireGPUCommandBuffer(device_);
+    if (textureCommandBuffer == nullptr) {
+        setError("SDL_AcquireGPUCommandBuffer(texture)");
+        SDL_ReleaseGPUTransferBuffer(device_, textureTransfer);
+        shutdown();
+        return false;
+    }
+    SDL_GPUCopyPass* textureCopyPass = SDL_BeginGPUCopyPass(textureCommandBuffer);
+    if (textureCopyPass == nullptr) {
+        setError("SDL_BeginGPUCopyPass(texture)");
+        (void)SDL_CancelGPUCommandBuffer(textureCommandBuffer);
+        SDL_ReleaseGPUTransferBuffer(device_, textureTransfer);
+        shutdown();
+        return false;
+    }
+    SDL_GPUTextureTransferInfo textureSource{};
+    textureSource.transfer_buffer = textureTransfer;
+    textureSource.pixels_per_row = texture.width;
+    textureSource.rows_per_layer = texture.height;
+    SDL_GPUTextureRegion textureDestination{};
+    textureDestination.texture = colorTexture_;
+    textureDestination.w = texture.width;
+    textureDestination.h = texture.height;
+    textureDestination.d = 1;
+    SDL_UploadToGPUTexture(textureCopyPass, &textureSource, &textureDestination, false);
+    SDL_EndGPUCopyPass(textureCopyPass);
+    if (!SDL_SubmitGPUCommandBuffer(textureCommandBuffer)) {
+        setError("SDL_SubmitGPUCommandBuffer(texture upload)");
+        SDL_ReleaseGPUTransferBuffer(device_, textureTransfer);
+        shutdown();
+        return false;
+    }
+    SDL_ReleaseGPUTransferBuffer(device_, textureTransfer);
+
+    SDL_GPUSamplerCreateInfo samplerInfo{};
+    samplerInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+    samplerInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+    samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    samplerInfo.max_lod = 0.0F;
+    colorSampler_ = SDL_CreateGPUSampler(device_, &samplerInfo);
+    if (colorSampler_ == nullptr) {
+        setError("SDL_CreateGPUSampler");
+        shutdown();
+        return false;
+    }
+
     SDL_GPUShaderCreateInfo vertexInfo{};
     vertexInfo.code_size = std::strlen(vertexSource);
     vertexInfo.code = reinterpret_cast<const Uint8*>(vertexSource);
@@ -500,6 +665,7 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
     fragmentInfo.entrypoint = "main_fragment";
     fragmentInfo.format = SDL_GPU_SHADERFORMAT_MSL;
     fragmentInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+    fragmentInfo.num_samplers = 1;
     SDL_GPUShader* fragmentShader = SDL_CreateGPUShader(device_, &fragmentInfo);
     if (fragmentShader == nullptr) {
         setError("SDL_CreateGPUShader(fragment)");
@@ -516,7 +682,8 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
     const SDL_GPUVertexAttribute attributes[]{
         {0, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, static_cast<Uint32>(offsetof(GpuVertex, position))},
         {1, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, static_cast<Uint32>(offsetof(GpuVertex, normal))},
-        {2, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, static_cast<Uint32>(offsetof(GpuVertex, color))}
+        {2, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, static_cast<Uint32>(offsetof(GpuVertex, color))},
+        {3, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, static_cast<Uint32>(offsetof(GpuVertex, uv))}
     };
 
     SDL_GPUColorTargetDescription colorTarget{};
@@ -528,7 +695,7 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
     pipelineInfo.vertex_input_state.vertex_buffer_descriptions = &vertexBufferDescription;
     pipelineInfo.vertex_input_state.num_vertex_buffers = 1;
     pipelineInfo.vertex_input_state.vertex_attributes = attributes;
-    pipelineInfo.vertex_input_state.num_vertex_attributes = 3;
+    pipelineInfo.vertex_input_state.num_vertex_attributes = 4;
     pipelineInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
     pipelineInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
     pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
@@ -707,6 +874,8 @@ bool GpuRenderer::renderFrame(
     SDL_BindGPUVertexBuffers(pass, 0, &vertexBinding, 1);
     const SDL_GPUBufferBinding indexBinding{indexBuffer_, 0};
     SDL_BindGPUIndexBuffer(pass, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+    const SDL_GPUTextureSamplerBinding colorBinding{colorTexture_, colorSampler_};
+    SDL_BindGPUFragmentSamplers(pass, 0, &colorBinding, 1);
 
     const Matrix4 view = viewMatrix(camera);
     const Matrix4 projection = projectionMatrix(
@@ -717,9 +886,17 @@ bool GpuRenderer::renderFrame(
         if (object == nullptr || !object->visible) {
             continue;
         }
-        const Matrix4 mvp = multiply(viewProjection, modelMatrix(object->transform));
-        SDL_PushGPUVertexUniformData(commandBuffer, 0, mvp.data(),
-                                     static_cast<Uint32>(sizeof(mvp)));
+        const Matrix4 model = modelMatrix(object->transform);
+        ObjectConstants constants{};
+        constants.model = model;
+        constants.mvp = multiply(viewProjection, model);
+        constants.normalMatrix = normalMatrix(object->transform);
+        constants.cameraPosition[0] = camera.x();
+        constants.cameraPosition[1] = camera.y();
+        constants.cameraPosition[2] = camera.z();
+        constants.cameraPosition[3] = 1.0F;
+        SDL_PushGPUVertexUniformData(commandBuffer, 0, &constants,
+                                     static_cast<Uint32>(sizeof(constants)));
         SDL_DrawGPUIndexedPrimitives(pass, indexCount_, 1, 0, 0, 0);
     }
 
@@ -871,6 +1048,14 @@ void GpuRenderer::shutdown() noexcept {
         if (depthTexture_ != nullptr) {
             SDL_ReleaseGPUTexture(device_, depthTexture_);
             depthTexture_ = nullptr;
+        }
+        if (colorSampler_ != nullptr) {
+            SDL_ReleaseGPUSampler(device_, colorSampler_);
+            colorSampler_ = nullptr;
+        }
+        if (colorTexture_ != nullptr) {
+            SDL_ReleaseGPUTexture(device_, colorTexture_);
+            colorTexture_ = nullptr;
         }
         depthWidth_ = 0;
         depthHeight_ = 0;
