@@ -453,3 +453,13 @@ CI:
 - GPU shading currently uses generated flat normals and simple directional diffuse lighting. GPU texture sampling, material/MTL support, GPU wireframe toggle, and a shared CPU/GPU renderer interface remain unimplemented.
 - The current GPU path requests MSL and is intended for Metal-capable devices; the Windows CI job validates compilation but does not prove Windows GPU runtime activation.
 - CI for the preceding backend extraction (commit `3d242d2cfe177496bbb0da89b575aac31863aafb`) has Windows success; its iOS job was still running at the time this implementation began. This new mesh-rendering commit requires its own Windows/iOS CI run and a physical iPhone Metal test.
+
+
+## GPU overlay UI — 2026-10-31
+
+- GPU mode now draws the on-screen touch guide and backend-switch button inside the SDL_GPU render pass instead of relying on SDL_Renderer.
+- The overlay includes the movement joystick rings, active movement knob, look-control ring, and a CPU-switch button label rendered with a tiny built-in bitmap glyph set.
+- The overlay pipeline uses screen-space coordinates and does not depth-test against the 3D scene.
+- CPU mode retains its existing SDL_Renderer overlay path.
+- The GPU renderer receives touch-control visibility and current movement pointer state from the main loop.
+- CI compilation is required; actual Metal rendering and touch interaction still need physical iPhone verification.
