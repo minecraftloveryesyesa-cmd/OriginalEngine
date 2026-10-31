@@ -126,7 +126,7 @@ void drawTouchCircle(SDL_Renderer* renderer, float cx, float cy, float radius) {
 
 void drawTouchText(SDL_Renderer* renderer, float x, float y, const char* text) {
     using namespace originalengine::touch_overlay;
-    for (const char* cursor = text; *cursor != '\\0'; ++cursor) {
+    for (const char* cursor = text; *cursor != '\0'; ++cursor) {
         const std::string_view pattern = glyph(*cursor);
         int row = 0;
         int column = 0;
