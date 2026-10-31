@@ -24,7 +24,9 @@ public:
 
     [[nodiscard]] bool initialize(SDL_Window* window, const Mesh& mesh);
     [[nodiscard]] bool renderFrame(
-        const Camera& camera, const std::vector<const SceneObject*>& objects);
+        const Camera& camera, const std::vector<const SceneObject*>& objects,
+        bool showTouchControls = true, bool movementActive = false,
+        float movementX = 0.0F, float movementY = 0.0F);
     void shutdown() noexcept;
 
     [[nodiscard]] const std::string& lastError() const noexcept { return lastError_; }
@@ -33,10 +35,22 @@ public:
 private:
     void setError(const char* operation);
     [[nodiscard]] bool createDepthTexture(Uint32 width, Uint32 height);
+    void drawOverlayRect(SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
+                         float x, float y, float width, float height,
+                         Uint32 viewportWidth, Uint32 viewportHeight,
+                         const float color[4]);
+    void drawOverlayCircle(SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
+                           float x, float y, float radiusX, float radiusY,
+                           Uint32 viewportWidth, Uint32 viewportHeight,
+                           const float color[4]);
+    void drawOverlay(SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
+                     Uint32 width, Uint32 height, bool movementActive,
+                     float movementX, float movementY);
 
     SDL_Window* window_{nullptr};
     SDL_GPUDevice* device_{nullptr};
     SDL_GPUGraphicsPipeline* pipeline_{nullptr};
+    SDL_GPUGraphicsPipeline* overlayPipeline_{nullptr};
     SDL_GPUBuffer* vertexBuffer_{nullptr};
     SDL_GPUBuffer* indexBuffer_{nullptr};
     SDL_GPUTexture* depthTexture_{nullptr};
