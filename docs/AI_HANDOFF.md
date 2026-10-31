@@ -216,6 +216,7 @@ GitHubには少なくとも次のブランチが存在する。
 | `include/engine/Mesh.hpp` | MeshVertex/MeshTriangle/Mesh |
 | `include/engine/ObjMeshLoader.hpp` / `src/engine/ObjMeshLoader.cpp` | OBJロード |
 | `include/engine/Renderer3D.hpp` / `src/engine/Renderer3D.cpp` | CPUソフトウェアレンダラー |
+| `include/engine/TouchOverlay.hpp` | CPU/GPU共通のオーバーレイ配置・配色・bitmap font定義 |
 | `include/engine/GpuDeviceProbe.hpp` / `src/engine/GpuDeviceProbe.cpp` | SDL_GPU利用可否のProbe |
 | `shaders/Metal/` | iOS向けMSL shader source（まだmain.cppのGPU previewからは未使用） |
 | `shaders/Source/` | HLSL shader source |
