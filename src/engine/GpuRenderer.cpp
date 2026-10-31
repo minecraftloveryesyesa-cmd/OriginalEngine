@@ -1,4 +1,5 @@
 #include "engine/GpuRenderer.hpp"
+#include "engine/TouchOverlay.hpp"
 
 #include <algorithm>
 #include <array>
@@ -116,9 +117,11 @@ vertex OverlayOutput overlay_vertex(
         const float angle0 = angles[0];
         const float angle1 = angles[2];
         const float2 outer0 = float2(cos(angle0), sin(angle0));
-        const float2 inner0 = outer0 * 0.82;
+        const float thickness = max(1.0 / max(constants.radius.x, constants.radius.y), 0.001);
+        const float innerScale = 1.0 - thickness;
+        const float2 inner0 = outer0 * innerScale;
         const float2 outer1 = float2(cos(angle1), sin(angle1));
-        const float2 inner1 = outer1 * 0.82;
+        const float2 inner1 = outer1 * innerScale;
         if (corner == 0 || corner == 3) local = outer0;
         else if (corner == 1) local = inner0;
         else if (corner == 2 || corner == 4) local = inner1;
@@ -578,6 +581,13 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
 
     SDL_GPUColorTargetDescription overlayColorTarget{};
     overlayColorTarget.format = SDL_GetGPUSwapchainTextureFormat(device_, window_);
+    overlayColorTarget.blend_state.enable_blend = true;
+    overlayColorTarget.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    overlayColorTarget.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    overlayColorTarget.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    overlayColorTarget.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    overlayColorTarget.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    overlayColorTarget.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
     SDL_GPUGraphicsPipelineCreateInfo overlayPipelineInfo{};
     overlayPipelineInfo.vertex_shader = overlayVertexShader;
     overlayPipelineInfo.fragment_shader = overlayFragmentShader;
@@ -767,29 +777,9 @@ void GpuRenderer::drawOverlayText(
     SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
     float x, float y, const char* text, Uint32 viewportWidth,
     Uint32 viewportHeight, const float color[4]) {
-    auto glyph = [](char character) -> const char* {
-        switch (character) {
-        case 'C': return "011/100/100/100/011";
-        case 'U': return "101/101/101/101/111";
-        case 'F': return "111/100/110/100/100";
-        case 'P': return "110/101/110/100/100";
-        case 'S': return "111/100/111/001/111";
-        case ':': return "000/010/000/010/000";
-        case '0': return "111/101/101/101/111";
-        case '1': return "010/110/010/010/111";
-        case '2': return "110/001/010/100/111";
-        case '3': return "110/001/010/001/110";
-        case '4': return "101/101/111/001/001";
-        case '5': return "111/100/110/001/110";
-        case '6': return "011/100/110/101/010";
-        case '7': return "111/001/010/010/010";
-        case '8': return "010/101/010/101/010";
-        case '9': return "010/101/011/001/110";
-        default: return "000/000/000/000/000";
-        }
-    };
+    using namespace touch_overlay;
     for (const char* cursor = text; *cursor != '\0'; ++cursor) {
-        const char* pattern = glyph(*cursor);
+        const std::string_view pattern = glyph(*cursor);
         int row = 0;
         int column = 0;
         for (const char* pixel = pattern; *pixel != '\0'; ++pixel) {
@@ -802,7 +792,7 @@ void GpuRenderer::drawOverlayText(
             }
             ++column;
         }
-        x += 12.0F;
+        x += fontAdvance;
     }
 }
 
@@ -811,69 +801,69 @@ void GpuRenderer::drawOverlay(
     Uint32 width, Uint32 height, bool movementActive, float movementX, float movementY,
     float framesPerSecond) {
     SDL_BindGPUGraphicsPipeline(pass, overlayPipeline_);
+    using namespace touch_overlay;
     const float dimension = static_cast<float>(std::min(width, height));
-    const float joystickX = static_cast<float>(width) * 0.20F;
-    const float joystickY = static_cast<float>(height) * 0.78F;
-    const float joystickRadius = dimension * 0.14F;
-    const float lookX = static_cast<float>(width) * 0.82F;
-    const float lookY = static_cast<float>(height) * 0.78F;
-    const float lookRadius = dimension * 0.12F;
-    const float ringColor[4]{0.28F, 0.72F, 0.96F, 1.0F};
-    const float guideColor[4]{0.18F, 0.43F, 0.61F, 1.0F};
-    const float knobColor[4]{0.58F, 0.84F, 1.0F, 1.0F};
-    const float buttonColor[4]{0.11F, 0.44F, 0.63F, 1.0F};
-    const float textColor[4]{0.96F, 0.98F, 1.0F, 1.0F};
+    const float joystickX = static_cast<float>(width) * movementCenterX;
+    const float joystickY = static_cast<float>(height) * controlCenterY;
+    const float joystickRadius = dimension * movementRadius;
+    const float lookX = static_cast<float>(width) * lookCenterX;
+    const float lookY = static_cast<float>(height) * controlCenterY;
+    const float lookRadiusValue = dimension * lookRadius;
+    const auto ring = normalized(ringColor);
+    const auto guide = normalized(guideColor);
+    const auto knob = normalized(knobColor);
+    const auto button = normalized(buttonColor);
+    const auto text = normalized(textColor);
 
     drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
-                      joystickRadius, joystickRadius, width, height, ringColor);
+                      joystickRadius, joystickRadius, width, height, ring.data());
     drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
-                      joystickRadius * 0.72F, joystickRadius * 0.72F,
-                      width, height, guideColor);
+                      joystickRadius * movementInnerRadius, joystickRadius * movementInnerRadius,
+                      width, height, ring.data());
     drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
-                      joystickRadius * 0.22F, joystickRadius * 0.22F,
-                      width, height, ringColor);
-    drawOverlayRect(commandBuffer, pass, joystickX - joystickRadius * 0.58F,
-                    joystickY - 1.0F, joystickRadius * 1.16F, 2.0F,
-                    width, height, guideColor);
-    drawOverlayRect(commandBuffer, pass, joystickX - 1.0F,
-                    joystickY - joystickRadius * 0.58F, 2.0F,
-                    joystickRadius * 1.16F, width, height, guideColor);
+                      joystickRadius * knobRadius, joystickRadius * knobRadius,
+                      width, height, ring.data());
+    drawOverlayRect(commandBuffer, pass, joystickX - joystickRadius * movementGuideRadius,
+                    joystickY - 0.5F, joystickRadius * movementGuideRadius * 2.0F, 1.0F,
+                    width, height, guide.data());
+    drawOverlayRect(commandBuffer, pass, joystickX - 0.5F,
+                    joystickY - joystickRadius * movementGuideRadius, 1.0F,
+                    joystickRadius * movementGuideRadius * 2.0F, width, height, guide.data());
     const float knobX = movementActive
         ? joystickX + std::clamp(movementX * static_cast<float>(width) - joystickX,
-                                 -joystickRadius * 0.58F, joystickRadius * 0.58F)
+                                 -joystickRadius * movementGuideRadius, joystickRadius * movementGuideRadius)
         : joystickX;
     const float knobY = movementActive
         ? joystickY + std::clamp(movementY * static_cast<float>(height) - joystickY,
-                                 -joystickRadius * 0.58F, joystickRadius * 0.58F)
+                                 -joystickRadius * movementGuideRadius, joystickRadius * movementGuideRadius)
         : joystickY;
     drawOverlayCircle(commandBuffer, pass, knobX, knobY,
-                      joystickRadius * 0.22F, joystickRadius * 0.22F,
-                      width, height, knobColor);
+                      joystickRadius * knobRadius, joystickRadius * knobRadius,
+                      width, height, knob.data());
 
-    drawOverlayCircle(commandBuffer, pass, lookX, lookY, lookRadius, lookRadius,
-                      width, height, ringColor);
-    drawOverlayCircle(commandBuffer, pass, lookX, lookY, lookRadius * 0.78F,
-                      lookRadius * 0.78F, width, height, guideColor);
-    drawOverlayRect(commandBuffer, pass, lookX - lookRadius * 0.48F,
-                    lookY - 1.0F, lookRadius * 0.96F, 2.0F,
-                    width, height, guideColor);
-    drawOverlayRect(commandBuffer, pass, lookX - 1.0F,
-                    lookY - lookRadius * 0.48F, 2.0F,
-                    lookRadius * 0.96F, width, height, guideColor);
+    drawOverlayCircle(commandBuffer, pass, lookX, lookY, lookRadiusValue, lookRadiusValue,
+                      width, height, ring.data());
+    drawOverlayCircle(commandBuffer, pass, lookX, lookY,
+                      lookRadiusValue * lookInnerRadius, lookRadiusValue * lookInnerRadius,
+                      width, height, ring.data());
+    drawOverlayRect(commandBuffer, pass, lookX - lookRadiusValue * lookGuideRadius,
+                    lookY - 0.5F, lookRadiusValue * lookGuideRadius * 2.0F, 1.0F,
+                    width, height, guide.data());
+    drawOverlayRect(commandBuffer, pass, lookX - 0.5F,
+                    lookY - lookRadiusValue * lookGuideRadius, 1.0F,
+                    lookRadiusValue * lookGuideRadius * 2.0F, width, height, guide.data());
 
-    drawOverlayRect(commandBuffer, pass, 18.0F, 16.0F, 106.0F, 34.0F,
-                    width, height, buttonColor);
     char fpsText[24]{};
     std::snprintf(fpsText, sizeof(fpsText), "FPS:%d",
                   std::max(0, static_cast<int>(std::round(framesPerSecond))));
-    drawOverlayText(commandBuffer, pass, 28.0F, 25.0F, fpsText,
-                    width, height, textColor);
+    drawOverlayText(commandBuffer, pass, fpsX, fpsY, fpsText, width, height, text.data());
 
-    const float buttonX = static_cast<float>(width) - 116.0F;
-    drawOverlayRect(commandBuffer, pass, buttonX, 18.0F, 98.0F, 42.0F,
-                    width, height, buttonColor);
-    drawOverlayText(commandBuffer, pass, buttonX + 27.0F, 31.0F, "CPU",
-                    width, height, textColor);
+    const float buttonX = static_cast<float>(width) - backendButtonRight - backendButtonWidth;
+    drawOverlayRect(commandBuffer, pass, buttonX, backendButtonY,
+                    backendButtonWidth, backendButtonHeight, width, height, button.data());
+    drawOverlayText(commandBuffer, pass, buttonX + 33.0F,
+                    backendButtonY + (backendButtonHeight - fontHeight) * 0.5F,
+                    "CPU", width, height, text.data());
 }
 
 void GpuRenderer::shutdown() noexcept {
