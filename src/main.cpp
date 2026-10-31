@@ -5,6 +5,7 @@
 #include "engine/GpuRenderer.hpp"
 #include "engine/ObjMeshLoader.hpp"
 #include "engine/Scene.hpp"
+#include "engine/TouchOverlay.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -122,6 +123,29 @@ void drawTouchCircle(SDL_Renderer* renderer, float cx, float cy, float radius) {
             cy + std::sin(a1) * radius);
     }
 }
+
+void drawTouchText(SDL_Renderer* renderer, float x, float y, const char* text) {
+    using namespace originalengine::touch_overlay;
+    for (const char* cursor = text; *cursor != '\\0'; ++cursor) {
+        const std::string_view pattern = glyph(*cursor);
+        int row = 0;
+        int column = 0;
+        for (const char pixel : pattern) {
+            if (pixel == '/') { ++row; column = 0; continue; }
+            if (pixel == '1') {
+                SDL_FRect rect{
+                    x + static_cast<float>(column) * fontPixelSize,
+                    y + static_cast<float>(row) * fontPixelSize,
+                    fontPixelSize, fontPixelSize
+                };
+                (void)SDL_RenderFillRect(renderer, &rect);
+            }
+            ++column;
+        }
+        x += fontAdvance;
+    }
+}
+
 
 std::filesystem::path resolveAssetPath(const char* relativePath) {
     const std::filesystem::path relative(relativePath);
@@ -498,57 +522,59 @@ int main(int argc, char* argv[]) {
             }
 
             if (!smokeTest) {
+                using namespace originalengine::touch_overlay;
                 const float minDimension = static_cast<float>(std::min(width, height));
-                const float joyX = static_cast<float>(width) * 0.20F;
-                const float joyY = static_cast<float>(height) * 0.78F;
-                const float joyRadius = minDimension * 0.14F;
+                const float joyX = static_cast<float>(width) * movementCenterX;
+                const float joyY = static_cast<float>(height) * controlCenterY;
+                const float joyRadius = minDimension * movementRadius;
                 SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-                // Matching concentric touch controls for CPU and GPU backends.
-                SDL_SetRenderDrawColor(renderer, 90, 178, 232, 150);
+
+                SDL_SetRenderDrawColor(renderer, ringColor.r, ringColor.g, ringColor.b, ringColor.a);
                 drawTouchCircle(renderer, joyX, joyY, joyRadius);
-                drawTouchCircle(renderer, joyX, joyY, joyRadius * 0.72F);
-                drawTouchCircle(renderer, joyX, joyY, joyRadius * 0.22F);
-                SDL_SetRenderDrawColor(renderer, 90, 178, 232, 105);
-                (void)SDL_RenderLine(renderer, joyX - joyRadius * 0.58F, joyY,
-                    joyX + joyRadius * 0.58F, joyY);
-                (void)SDL_RenderLine(renderer, joyX, joyY - joyRadius * 0.58F,
-                    joyX, joyY + joyRadius * 0.58F);
+                drawTouchCircle(renderer, joyX, joyY, joyRadius * movementInnerRadius);
+                drawTouchCircle(renderer, joyX, joyY, joyRadius * knobRadius);
+                SDL_SetRenderDrawColor(renderer, guideColor.r, guideColor.g, guideColor.b, guideColor.a);
+                (void)SDL_RenderLine(renderer, joyX - joyRadius * movementGuideRadius, joyY,
+                    joyX + joyRadius * movementGuideRadius, joyY);
+                (void)SDL_RenderLine(renderer, joyX, joyY - joyRadius * movementGuideRadius,
+                    joyX, joyY + joyRadius * movementGuideRadius);
                 const float knobX = hasMovementFinger
                     ? joyX + std::clamp(movementX * static_cast<float>(width) - joyX,
-                                        -joyRadius * 0.58F, joyRadius * 0.58F)
+                                        -joyRadius * movementGuideRadius, joyRadius * movementGuideRadius)
                     : joyX;
                 const float knobY = hasMovementFinger
                     ? joyY + std::clamp(movementY * static_cast<float>(height) - joyY,
-                                        -joyRadius * 0.58F, joyRadius * 0.58F)
+                                        -joyRadius * movementGuideRadius, joyRadius * movementGuideRadius)
                     : joyY;
-                SDL_SetRenderDrawColor(renderer, 120, 205, 255, 230);
-                drawTouchCircle(renderer, knobX, knobY, joyRadius * 0.22F);
+                SDL_SetRenderDrawColor(renderer, knobColor.r, knobColor.g, knobColor.b, knobColor.a);
+                drawTouchCircle(renderer, knobX, knobY, joyRadius * knobRadius);
 
-                SDL_SetRenderDrawColor(renderer, 90, 178, 232, 150);
-                const float lookX = static_cast<float>(width) * 0.82F;
-                const float lookY = static_cast<float>(height) * 0.78F;
-                const float lookRadius = minDimension * 0.12F;
-                drawTouchCircle(renderer, lookX, lookY, lookRadius);
-                drawTouchCircle(renderer, lookX, lookY, lookRadius * 0.78F);
-                SDL_SetRenderDrawColor(renderer, 90, 178, 232, 105);
-                (void)SDL_RenderLine(renderer, lookX - lookRadius * 0.48F, lookY,
-                    lookX + lookRadius * 0.48F, lookY);
-                (void)SDL_RenderLine(renderer, lookX, lookY - lookRadius * 0.48F,
-                    lookX, lookY + lookRadius * 0.48F);
+                const float lookX = static_cast<float>(width) * lookCenterX;
+                const float lookY = static_cast<float>(height) * controlCenterY;
+                const float lookRadiusValue = minDimension * lookRadius;
+                SDL_SetRenderDrawColor(renderer, ringColor.r, ringColor.g, ringColor.b, ringColor.a);
+                drawTouchCircle(renderer, lookX, lookY, lookRadiusValue);
+                drawTouchCircle(renderer, lookX, lookY, lookRadiusValue * lookInnerRadius);
+                SDL_SetRenderDrawColor(renderer, guideColor.r, guideColor.g, guideColor.b, guideColor.a);
+                (void)SDL_RenderLine(renderer, lookX - lookRadiusValue * lookGuideRadius, lookY,
+                    lookX + lookRadiusValue * lookGuideRadius, lookY);
+                (void)SDL_RenderLine(renderer, lookX, lookY - lookRadiusValue * lookGuideRadius,
+                    lookX, lookY + lookRadiusValue * lookGuideRadius);
 
-                SDL_SetRenderDrawColor(renderer, 245, 250, 255, 255);
-                const std::string fpsLabel = "FPS: " +
+                SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, textColor.a);
+                const std::string fpsLabel = "FPS:" +
                     std::to_string(static_cast<int>(std::round(smoothedFps)));
-                (void)SDL_RenderDebugText(renderer, 20.0F, 20.0F, fpsLabel.c_str());
+                drawTouchText(renderer, fpsX, fpsY, fpsLabel.c_str());
 
                 SDL_FRect backendButton{
-                    static_cast<float>(width) - 116.0F, 18.0F, 98.0F, 42.0F
+                    static_cast<float>(width) - backendButtonRight - backendButtonWidth,
+                    backendButtonY, backendButtonWidth, backendButtonHeight
                 };
-                SDL_SetRenderDrawColor(renderer, 28, 112, 160, 220);
+                SDL_SetRenderDrawColor(renderer, buttonColor.r, buttonColor.g, buttonColor.b, buttonColor.a);
                 (void)SDL_RenderFillRect(renderer, &backendButton);
-                SDL_SetRenderDrawColor(renderer, 245, 250, 255, 255);
-                (void)SDL_RenderDebugText(renderer, backendButton.x + 24.0F,
-                    backendButton.y + 14.0F, "GPU");
+                SDL_SetRenderDrawColor(renderer, textColor.r, textColor.g, textColor.b, textColor.a);
+                drawTouchText(renderer, backendButton.x + 33.0F,
+                    backendButton.y + (backendButtonHeight - fontHeight) * 0.5F, "GPU");
             }
 
             // Present exactly once per frame, after the 2D touch controls.
