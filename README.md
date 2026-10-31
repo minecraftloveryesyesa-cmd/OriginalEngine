@@ -2,7 +2,7 @@
 
 A cross-platform game-engine project, starting with a C++20 foundation.
 
-## Current status
+## AI development handoff\n\nFor a complete, source-oriented handoff covering verified implementation status, branch strategy, iOS builds, GPU renderer status, roadmap, and rules for AI agents, see [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md). Read this before continuing development in a new chat or with another AI.\n\n## Current status
 
 - CMake-based C++20 project
 - SDL3 window and event loop
@@ -128,7 +128,7 @@ tests/                Automated camera, collision, and scene tests
 
 Gasoline Engine は、C++20 を基盤として開発しているクロスプラットフォーム向けゲームエンジンのプロジェクトです。
 
-## 現在の機能
+## AI開発引き継ぎ資料\n\n別のAIや新しいチャットで開発を継続する場合は、実装状況・ブランチ・iOSビルド・GPU描画の状態・ロードマップ・開発ルールをまとめた [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md) を最初に読んでください。\n\n## 現在の機能
 
 - CMake を使用した C++20 プロジェクト
 - SDL3 によるウィンドウ管理とイベントループ
