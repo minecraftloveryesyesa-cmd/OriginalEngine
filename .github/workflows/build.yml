@@ -71,21 +71,20 @@ jobs:
 
       - name: Record Xcode version
         id: xcode-version
-        run: echo "version=$(xcodebuild -version | tr '\n' '-')" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          xcode_version="$(xcodebuild -version | paste -sd ' ' -)"
+          echo "version=$xcode_version" >> "$GITHUB_OUTPUT"
 
-      # Reuse SDL3's pinned source and Xcode's compiled intermediates.
-      # The fallback key lets a changed commit reuse the previous build.
-      - name: Cache iOS build data
+      # Cache only the pinned SDL3 source. Xcode's default DerivedData path is
+      # intentionally left unchanged until a supported scheme-based build is configured.
+      - name: Cache SDL3 source
         uses: actions/cache@v4
         with:
-          path: |
-            build-ios/_deps/sdl3-src
-            build-ios/DerivedData/Build
-            build-ios/DerivedData/ModuleCache.noindex
-          key: ios-deriveddata-${{ runner.os }}-${{ steps.xcode-version.outputs.version }}-${{ hashFiles('CMakeLists.txt', 'src/**', 'include/**', 'shaders/**') }}
+          path: build-ios/_deps/sdl3-src
+          key: ios-sdl3-source-${{ runner.os }}-${{ steps.xcode-version.outputs.version }}-${{ hashFiles('CMakeLists.txt') }}
           restore-keys: |
-            ios-deriveddata-${{ runner.os }}-${{ steps.xcode-version.outputs.version }}-
-            ${{ runner.os }}-sdl3-release-3.2.10
+            ios-sdl3-source-${{ runner.os }}-
 
       - name: Configure iOS Device
         run: >-
@@ -102,7 +101,6 @@ jobs:
         run: >-
           cmake --build build-ios --config Release --parallel
           -- -sdk iphoneos
-          -derivedDataPath "${{ github.workspace }}/build-ios/DerivedData"
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
           CODE_SIGNING_IDENTITY=""
