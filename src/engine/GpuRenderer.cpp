@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <iterator>
 #include <vector>
 
 namespace originalengine {
@@ -425,13 +426,13 @@ bool GpuRenderer::initialize(SDL_Window* window, const Mesh& mesh) {
 
     SDL_GPUVertexBufferDescription vertexBufferDescription{};
     vertexBufferDescription.slot = 0;
-    vertexBufferDescription.pitch = sizeof(GpuVertex);
+    vertexBufferDescription.pitch = static_cast<Uint32>(sizeof(GpuVertex));
     vertexBufferDescription.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
 
     const SDL_GPUVertexAttribute attributes[]{
-        {0, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, offsetof(GpuVertex, position)},
-        {1, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, offsetof(GpuVertex, normal)},
-        {2, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, offsetof(GpuVertex, color)}
+        {0, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, static_cast<Uint32>(offsetof(GpuVertex, position))},
+        {1, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, static_cast<Uint32>(offsetof(GpuVertex, normal))},
+        {2, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, static_cast<Uint32>(offsetof(GpuVertex, color))}
     };
 
     SDL_GPUColorTargetDescription colorTarget{};
