@@ -428,6 +428,15 @@ CI:
 
 ## 追記履歴
 
+### 2026-10-31 — CPU/GPUオーバーレイ共通化
+- `include/engine/TouchOverlay.hpp` に画面比率、サイズ、色、3x5 bitmap fontを集約。CPU/GPU両方が同じ定義を使用。
+- CPU側のFPS/バックエンドラベルも独自bitmap glyphで描画し、GPU側と文字形状・ピクセル寸法を統一。
+- FPSラベルは両方とも `FPS:<値>`。GPU側のFPS背景カードをなくし、CPUと同じテキスト表示に変更。
+- ジョイスティック/Look guideの中心位置・半径・ガイド範囲・色・ノブサイズを共通化。
+- GPU側の円リングを約1pxの輪郭にし、CPU側の線描画に近づけた。GPU overlay pipelineにはSDL_GPUのstraight-alpha blend stateを設定。
+- バックエンド切替ボタンの矩形サイズ・位置・文字位置を共通化。CPU側はGPU、GPU側はCPUを表示。
+- CIでのビルドとiPhone実機での視覚的な一致は、コミット後に別途確認する。
+
 - 2026-10-31: `ios/initial-support` のソース、README、CMake、workflow、GPU実装を確認して初版作成。GPU三角形プレビュー、iOS unsigned IPA workflow、CPU software renderer、iOSタッチ操作の状態を整理。
 - 2026-10-31: iOS buildのSDL3 source cache、Xcode versionを含むcache key、`FETCHCONTENT_UPDATES_DISCONNECTED`、`.app`自動検出を追記。Windows/iOS両jobで`docs/`をsparse checkout対象外にした設定を追記。\n- 2026-10-31: Actionsの失敗runを調査。Xcode version出力が複数行のため`$GITHUB_OUTPUT`で不正形式になっていた問題、およびCMake経由の`xcodebuild`に`-derivedDataPath`を渡してscheme要求エラーになっていた問題を確認。workflowを修正し、Xcode versionを1行化、DerivedData cache/引数を一旦除去してSDL3 source cacheのみ残した。修正後CIの結果は未確認。
 
