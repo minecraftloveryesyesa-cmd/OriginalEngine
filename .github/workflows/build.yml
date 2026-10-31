@@ -51,13 +51,23 @@ jobs:
       - name: Set up CMake
         uses: lukka/get-cmake@latest
 
-      # SDL3 is pinned to release-3.2.10. Reuse its checked-out source
-      # between runs so FetchContent does not need to clone it every time.
-      - name: Cache SDL3 source
+      - name: Record Xcode version
+        id: xcode-version
+        run: echo "version=$(xcodebuild -version | tr '\\n' '-')" >> "$GITHUB_OUTPUT"
+
+      # Reuse SDL3's pinned source and Xcode's compiled intermediates.
+      # The fallback key lets a changed commit reuse the previous build.
+      - name: Cache iOS build data
         uses: actions/cache@v4
         with:
-          path: build-ios/_deps/sdl3-src
-          key: ${{ runner.os }}-sdl3-release-3.2.10
+          path: |
+            build-ios/_deps/sdl3-src
+            build-ios/DerivedData/Build
+            build-ios/DerivedData/ModuleCache.noindex
+          key: ios-deriveddata-${{ runner.os }}-${{ steps.xcode-version.outputs.version }}-${{ hashFiles('CMakeLists.txt', 'src/**', 'include/**', 'shaders/**') }}
+          restore-keys: |
+            ios-deriveddata-${{ runner.os }}-${{ steps.xcode-version.outputs.version }}-
+            ${{ runner.os }}-sdl3-release-3.2.10
 
       - name: Configure iOS Device
         run: >-
@@ -74,6 +84,7 @@ jobs:
         run: >-
           cmake --build build-ios --config Release --parallel
           -- -sdk iphoneos
+          -derivedDataPath build-ios/DerivedData
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
           CODE_SIGNING_IDENTITY=""
@@ -81,7 +92,9 @@ jobs:
       - name: Package unsigned IPA
         run: |
           mkdir -p ipa/Payload
-          cp -R build-ios/Release-iphoneos/originalengine_app.app ipa/Payload/
+          APP_PATH="$(find build-ios -type d -name originalengine_app.app -print -quit)"
+          test -n "$APP_PATH"
+          cp -R "$APP_PATH" ipa/Payload/
           cd ipa
           /usr/bin/zip -qry GasolineEngine-iOS-unsigned.ipa Payload
 
