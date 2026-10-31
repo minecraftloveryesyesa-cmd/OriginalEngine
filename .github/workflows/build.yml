@@ -54,8 +54,17 @@ jobs:
     name: iOS Device / Unsigned IPA
     runs-on: macos-15
     steps:
-      - name: Check out repository
+      - name: Check out repository (exclude docs)
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            CMakeLists.txt
+            assets
+            include
+            shaders
+            src
+            tests
+          sparse-checkout-cone-mode: true
 
       - name: Set up CMake
         uses: lukka/get-cmake@latest
