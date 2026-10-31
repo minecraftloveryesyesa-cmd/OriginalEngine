@@ -17,6 +17,7 @@ add_library(originalengine
     src/engine/Application.cpp
     src/engine/Camera.cpp
     src/engine/CollisionWorld.cpp
+    src/engine/GpuRenderer.cpp
     src/engine/Renderer3D.cpp
     src/engine/Scene.cpp
     src/engine/ObjMeshLoader.cpp
