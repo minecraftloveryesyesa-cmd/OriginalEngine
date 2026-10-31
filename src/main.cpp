@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -128,7 +129,87 @@ bool initializeGpuBackend(SDL_Window* window, SDL_GPUDevice** outputDevice) {
     return true;
 }
 
-bool renderGpuPreviewFrame(SDL_GPUDevice* device, SDL_Window* window) {
+SDL_GPUGraphicsPipeline* createGpuTrianglePipeline(SDL_GPUDevice* device, SDL_Window* window) {
+    // A vertex-ID-only shader keeps this first GPU test independent of vertex buffers.
+    static constexpr char vertexSource[] = R"metal(
+#include <metal_stdlib>
+using namespace metal;
+struct VertexOutput { float4 position [[position]]; float3 color; };
+vertex VertexOutput main_vertex(uint vertexID [[vertex_id]]) {
+    constexpr float2 positions[3] = {
+        float2(0.0, 0.68), float2(-0.62, -0.48), float2(0.62, -0.48)
+    };
+    constexpr float3 colors[3] = {
+        float3(1.0, 0.28, 0.18), float3(0.18, 0.78, 1.0), float3(0.42, 1.0, 0.48)
+    };
+    VertexOutput output;
+    output.position = float4(positions[vertexID], 0.0, 1.0);
+    output.color = colors[vertexID];
+    return output;
+}
+)metal";
+    static constexpr char fragmentSource[] = R"metal(
+#include <metal_stdlib>
+using namespace metal;
+struct VertexOutput { float4 position [[position]]; float3 color; };
+fragment float4 main_fragment(VertexOutput input [[stage_in]]) {
+    return float4(saturate(input.color), 1.0);
+}
+)metal";
+
+    SDL_GPUShaderCreateInfo vertexInfo{};
+    vertexInfo.code_size = std::strlen(vertexSource);
+    vertexInfo.code = reinterpret_cast<const Uint8*>(vertexSource);
+    vertexInfo.entrypoint = "main_vertex";
+    vertexInfo.format = SDL_GPU_SHADERFORMAT_MSL;
+    vertexInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
+    SDL_GPUShader* vertexShader = SDL_CreateGPUShader(device, &vertexInfo);
+    if (vertexShader == nullptr) {
+        writeDiagnostic(std::string("SDL_CreateGPUShader(vertex) failed: ") + SDL_GetError());
+        return nullptr;
+    }
+
+    SDL_GPUShaderCreateInfo fragmentInfo{};
+    fragmentInfo.code_size = std::strlen(fragmentSource);
+    fragmentInfo.code = reinterpret_cast<const Uint8*>(fragmentSource);
+    fragmentInfo.entrypoint = "main_fragment";
+    fragmentInfo.format = SDL_GPU_SHADERFORMAT_MSL;
+    fragmentInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+    SDL_GPUShader* fragmentShader = SDL_CreateGPUShader(device, &fragmentInfo);
+    if (fragmentShader == nullptr) {
+        writeDiagnostic(std::string("SDL_CreateGPUShader(fragment) failed: ") + SDL_GetError());
+        SDL_ReleaseGPUShader(device, vertexShader);
+        return nullptr;
+    }
+
+    SDL_GPUColorTargetDescription colorTarget{};
+    colorTarget.format = SDL_GetGPUSwapchainTextureFormat(device, window);
+
+    SDL_GPUGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.vertex_shader = vertexShader;
+    pipelineInfo.fragment_shader = fragmentShader;
+    pipelineInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    pipelineInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+    pipelineInfo.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    pipelineInfo.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    pipelineInfo.target_info.color_target_descriptions = &colorTarget;
+    pipelineInfo.target_info.num_color_targets = 1;
+
+    SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(device, &pipelineInfo);
+    if (pipeline == nullptr) {
+        writeDiagnostic(std::string("SDL_CreateGPUGraphicsPipeline failed: ") + SDL_GetError());
+    }
+    SDL_ReleaseGPUShader(device, fragmentShader);
+    SDL_ReleaseGPUShader(device, vertexShader);
+    return pipeline;
+}
+
+bool renderGpuPreviewFrame(
+    SDL_GPUDevice* device,
+    SDL_Window* window,
+    SDL_GPUGraphicsPipeline* pipeline)
+{
     SDL_GPUCommandBuffer* commandBuffer = SDL_AcquireGPUCommandBuffer(device);
     if (commandBuffer == nullptr) return false;
     SDL_GPUTexture* texture = nullptr;
@@ -146,7 +227,12 @@ bool renderGpuPreviewFrame(SDL_GPUDevice* device, SDL_Window* window) {
     target.load_op = SDL_GPU_LOADOP_CLEAR;
     target.store_op = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(commandBuffer, &target, 1, nullptr);
-    if (pass == nullptr) return SDL_SubmitGPUCommandBuffer(commandBuffer);
+    if (pass == nullptr) {
+        writeDiagnostic(std::string("SDL_BeginGPURenderPass failed: ") + SDL_GetError());
+        return SDL_SubmitGPUCommandBuffer(commandBuffer);
+    }
+    SDL_BindGPUGraphicsPipeline(pass, pipeline);
+    SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
     SDL_EndGPURenderPass(pass);
     return SDL_SubmitGPUCommandBuffer(commandBuffer);
 }
@@ -248,6 +334,7 @@ int main(int argc, char* argv[]) {
     int exitCode = 0;
     std::unique_ptr<originalengine::Renderer3D> renderer3D;
     SDL_GPUDevice* gpuDevice = nullptr;
+    SDL_GPUGraphicsPipeline* gpuTrianglePipeline = nullptr;
     try {
         writeDiagnostic("Stage: creating Renderer3D");
         renderer3D = std::make_unique<originalengine::Renderer3D>(renderer);
@@ -435,6 +522,14 @@ int main(int argc, char* argv[]) {
                     SDL_DestroyRenderer(renderer);
                     renderer = nullptr;
                     if (initializeGpuBackend(window, &gpuDevice)) {
+                        gpuTrianglePipeline = createGpuTrianglePipeline(gpuDevice, window);
+                        if (gpuTrianglePipeline == nullptr) {
+                            SDL_ReleaseWindowFromGPUDevice(gpuDevice, window);
+                            SDL_DestroyGPUDevice(gpuDevice);
+                            gpuDevice = nullptr;
+                        }
+                    }
+                    if (gpuDevice != nullptr && gpuTrianglePipeline != nullptr) {
                         gpuMode = true;
                         SDL_SetWindowTitle(window, "Gasoline Engine | GPU preview | G: switch to CPU");
                     } else {
@@ -448,6 +543,8 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 } else {
+                    SDL_ReleaseGPUGraphicsPipeline(gpuDevice, gpuTrianglePipeline);
+                    gpuTrianglePipeline = nullptr;
                     SDL_ReleaseWindowFromGPUDevice(gpuDevice, window);
                     SDL_DestroyGPUDevice(gpuDevice);
                     gpuDevice = nullptr;
@@ -497,7 +594,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (gpuMode) {
-                if (!renderGpuPreviewFrame(gpuDevice, window)) {
+                if (!renderGpuPreviewFrame(gpuDevice, window, gpuTrianglePipeline)) {
                     writeDiagnostic(std::string("GPU preview frame failed: ") + SDL_GetError());
                     exitCode = 1;
                     break;
@@ -565,6 +662,10 @@ int main(int argc, char* argv[]) {
     writeDiagnostic(std::string("Stage: shutting down with exit code ") + std::to_string(exitCode));
     renderer3D.reset();
     if (gpuDevice != nullptr) {
+        if (gpuTrianglePipeline != nullptr) {
+            SDL_ReleaseGPUGraphicsPipeline(gpuDevice, gpuTrianglePipeline);
+            gpuTrianglePipeline = nullptr;
+        }
         SDL_ReleaseWindowFromGPUDevice(gpuDevice, window);
         SDL_DestroyGPUDevice(gpuDevice);
     }
