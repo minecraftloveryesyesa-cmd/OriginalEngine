@@ -430,3 +430,14 @@ CI:
 
 - 2026-10-31: `ios/initial-support` のソース、README、CMake、workflow、GPU実装を確認して初版作成。GPU三角形プレビュー、iOS unsigned IPA workflow、CPU software renderer、iOSタッチ操作の状態を整理。
 - 2026-10-31: iOS buildのSDL3 source cache、Xcode versionを含むcache key、`FETCHCONTENT_UPDATES_DISCONNECTED`、`.app`自動検出を追記。Windows/iOS両jobで`docs/`をsparse checkout対象外にした設定を追記。\n- 2026-10-31: Actionsの失敗runを調査。Xcode version出力が複数行のため`$GITHUB_OUTPUT`で不正形式になっていた問題、およびCMake経由の`xcodebuild`に`-derivedDataPath`を渡してscheme要求エラーになっていた問題を確認。workflowを修正し、Xcode versionを1行化、DerivedData cache/引数を一旦除去してSDL3 source cacheのみ残した。修正後CIの結果は未確認。
+
+
+## GPU renderer extraction — 2026-10-31
+
+- Added `include/engine/GpuRenderer.hpp` and `src/engine/GpuRenderer.cpp`.
+- Moved SDL_GPU device creation, window claim, MSL shader creation, graphics pipeline ownership, swapchain frame submission, and teardown out of `src/main.cpp`.
+- The application now owns a `GpuRenderer` object and uses its `initialize()`, `renderFrame()`, and RAII destructor for backend switching.
+- CPU renderer recreation on GPU initialization failure is retained.
+- The current GPU output is **still the original hard-coded triangle preview**. This commit is an architecture/refactoring milestone, not yet OBJ/scene GPU rendering.
+- The GPU backend currently requests MSL because its embedded shaders are MSL. Cross-platform shader compilation/format selection remains unresolved; validate Windows GPU activation separately.
+- CI must verify this refactor before further GPU feature work. No physical iPhone Metal test is implied.
