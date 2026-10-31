@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <limits>
 #include <iterator>
 #include <vector>
@@ -634,7 +635,8 @@ bool GpuRenderer::createDepthTexture(Uint32 width, Uint32 height) {
 
 bool GpuRenderer::renderFrame(
     const Camera& camera, const std::vector<const SceneObject*>& objects,
-    bool showTouchControls, bool movementActive, float movementX, float movementY) {
+    bool showTouchControls, bool movementActive, float movementX, float movementY,
+    float framesPerSecond) {
     if (device_ == nullptr || window_ == nullptr || pipeline_ == nullptr ||
         vertexBuffer_ == nullptr || indexBuffer_ == nullptr) {
         lastError_ = "GPU renderer is not initialized";
@@ -712,7 +714,8 @@ bool GpuRenderer::renderFrame(
     }
 
     if (showTouchControls && overlayPipeline_ != nullptr) {
-        drawOverlay(commandBuffer, pass, width, height, movementActive, movementX, movementY);
+        drawOverlay(commandBuffer, pass, width, height, movementActive, movementX, movementY,
+                    framesPerSecond);
     }
 
     SDL_EndGPURenderPass(pass);
@@ -760,70 +763,115 @@ void GpuRenderer::drawOverlayCircle(
     SDL_DrawGPUPrimitives(pass, 32U * 6U, 1, 0, 0);
 }
 
+void GpuRenderer::drawOverlayText(
+    SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
+    float x, float y, const char* text, Uint32 viewportWidth,
+    Uint32 viewportHeight, const float color[4]) {
+    auto glyph = [](char character) -> const char* {
+        switch (character) {
+        case 'F': return "111/100/110/100/100";
+        case 'P': return "110/101/110/100/100";
+        case 'S': return "111/100/111/001/111";
+        case ':': return "000/010/000/010/000";
+        case '0': return "111/101/101/101/111";
+        case '1': return "010/110/010/010/111";
+        case '2': return "110/001/010/100/111";
+        case '3': return "110/001/010/001/110";
+        case '4': return "101/101/111/001/001";
+        case '5': return "111/100/110/001/110";
+        case '6': return "011/100/110/101/010";
+        case '7': return "111/001/010/010/010";
+        case '8': return "010/101/010/101/010";
+        case '9': return "010/101/011/001/110";
+        default: return "000/000/000/000/000";
+        }
+    };
+    for (const char* cursor = text; *cursor != '\0'; ++cursor) {
+        const char* pattern = glyph(*cursor);
+        int row = 0;
+        int column = 0;
+        for (const char* pixel = pattern; *pixel != '\0'; ++pixel) {
+            if (*pixel == '/') { ++row; column = 0; continue; }
+            if (*pixel == '1') {
+                drawOverlayRect(commandBuffer, pass,
+                    x + static_cast<float>(column) * 3.0F,
+                    y + static_cast<float>(row) * 3.0F,
+                    2.0F, 2.0F, viewportWidth, viewportHeight, color);
+            }
+            ++column;
+        }
+        x += 12.0F;
+    }
+}
+
 void GpuRenderer::drawOverlay(
     SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* pass,
-    Uint32 width, Uint32 height, bool movementActive, float movementX, float movementY) {
+    Uint32 width, Uint32 height, bool movementActive, float movementX, float movementY,
+    float framesPerSecond) {
     SDL_BindGPUGraphicsPipeline(pass, overlayPipeline_);
     const float dimension = static_cast<float>(std::min(width, height));
     const float joystickX = static_cast<float>(width) * 0.20F;
     const float joystickY = static_cast<float>(height) * 0.78F;
     const float joystickRadius = dimension * 0.14F;
-    const float ringColor[4]{0.82F, 0.88F, 0.96F, 1.0F};
-    const float knobColor[4]{0.40F, 0.68F, 0.94F, 1.0F};
+    const float lookX = static_cast<float>(width) * 0.82F;
+    const float lookY = static_cast<float>(height) * 0.78F;
+    const float lookRadius = dimension * 0.12F;
+    const float ringColor[4]{0.28F, 0.72F, 0.96F, 1.0F};
+    const float guideColor[4]{0.18F, 0.43F, 0.61F, 1.0F};
+    const float knobColor[4]{0.58F, 0.84F, 1.0F, 1.0F};
     const float buttonColor[4]{0.11F, 0.44F, 0.63F, 1.0F};
     const float textColor[4]{0.96F, 0.98F, 1.0F, 1.0F};
 
     drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
                       joystickRadius, joystickRadius, width, height, ringColor);
     drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
-                      joystickRadius * 0.38F, joystickRadius * 0.38F,
+                      joystickRadius * 0.72F, joystickRadius * 0.72F,
+                      width, height, guideColor);
+    drawOverlayCircle(commandBuffer, pass, joystickX, joystickY,
+                      joystickRadius * 0.22F, joystickRadius * 0.22F,
                       width, height, ringColor);
-    if (movementActive) {
-        const float knobX = joystickX + std::clamp(
-            movementX * static_cast<float>(width) - joystickX,
-            -joystickRadius, joystickRadius);
-        const float knobY = joystickY + std::clamp(
-            movementY * static_cast<float>(height) - joystickY,
-            -joystickRadius, joystickRadius);
-        drawOverlayCircle(commandBuffer, pass, knobX, knobY,
-                          joystickRadius * 0.25F, joystickRadius * 0.25F,
-                          width, height, knobColor);
-    }
-    drawOverlayCircle(commandBuffer, pass, static_cast<float>(width) * 0.82F,
-                      static_cast<float>(height) * 0.78F,
-                      dimension * 0.12F, dimension * 0.12F,
+    drawOverlayRect(commandBuffer, pass, joystickX - joystickRadius * 0.58F,
+                    joystickY - 1.0F, joystickRadius * 1.16F, 2.0F,
+                    width, height, guideColor);
+    drawOverlayRect(commandBuffer, pass, joystickX - 1.0F,
+                    joystickY - joystickRadius * 0.58F, 2.0F,
+                    joystickRadius * 1.16F, width, height, guideColor);
+    const float knobX = movementActive
+        ? joystickX + std::clamp(movementX * static_cast<float>(width) - joystickX,
+                                 -joystickRadius * 0.58F, joystickRadius * 0.58F)
+        : joystickX;
+    const float knobY = movementActive
+        ? joystickY + std::clamp(movementY * static_cast<float>(height) - joystickY,
+                                 -joystickRadius * 0.58F, joystickRadius * 0.58F)
+        : joystickY;
+    drawOverlayCircle(commandBuffer, pass, knobX, knobY,
+                      joystickRadius * 0.22F, joystickRadius * 0.22F,
+                      width, height, knobColor);
+
+    drawOverlayCircle(commandBuffer, pass, lookX, lookY, lookRadius, lookRadius,
                       width, height, ringColor);
+    drawOverlayCircle(commandBuffer, pass, lookX, lookY, lookRadius * 0.78F,
+                      lookRadius * 0.78F, width, height, guideColor);
+    drawOverlayRect(commandBuffer, pass, lookX - lookRadius * 0.48F,
+                    lookY - 1.0F, lookRadius * 0.96F, 2.0F,
+                    width, height, guideColor);
+    drawOverlayRect(commandBuffer, pass, lookX - 1.0F,
+                    lookY - lookRadius * 0.48F, 2.0F,
+                    lookRadius * 0.96F, width, height, guideColor);
+
+    drawOverlayRect(commandBuffer, pass, 18.0F, 16.0F, 106.0F, 34.0F,
+                    width, height, buttonColor);
+    char fpsText[24]{};
+    std::snprintf(fpsText, sizeof(fpsText), "FPS:%d",
+                  std::max(0, static_cast<int>(std::round(framesPerSecond))));
+    drawOverlayText(commandBuffer, pass, 28.0F, 25.0F, fpsText,
+                    width, height, textColor);
 
     const float buttonX = static_cast<float>(width) - 116.0F;
     drawOverlayRect(commandBuffer, pass, buttonX, 18.0F, 98.0F, 42.0F,
                     width, height, buttonColor);
-
-    // Tiny 3x5 bitmap font keeps the backend-switch label available without
-    // depending on SDL_Renderer or a separate font subsystem.
-    const char* glyphs[3] = {"111/100/100/100/111", "110/101/110/100/100",
-                             "101/101/101/101/111"};
-    const float textWidth = 3.0F * 3.0F + 2.0F * 2.0F;
-    const float textStartX = buttonX + (98.0F - textWidth) * 0.5F;
-    const float textStartY = 31.0F;
-    for (int letter = 0; letter < 3; ++letter) {
-        int row = 0;
-        int column = 0;
-        for (const char* cursor = glyphs[letter]; *cursor != '\0'; ++cursor) {
-            if (*cursor == '/') {
-                ++row;
-                column = 0;
-            } else {
-                if (*cursor == '1') {
-                    drawOverlayRect(commandBuffer, pass,
-                        textStartX + static_cast<float>(letter) * 13.0F +
-                            static_cast<float>(column) * 3.0F,
-                        textStartY + static_cast<float>(row) * 2.0F,
-                        2.0F, 1.6F, width, height, textColor);
-                }
-                ++column;
-            }
-        }
-    }
+    drawOverlayText(commandBuffer, pass, buttonX + 27.0F, 31.0F, "CPU",
+                    width, height, textColor);
 }
 
 void GpuRenderer::shutdown() noexcept {
